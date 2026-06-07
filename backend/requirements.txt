@@ -2,11 +2,12 @@ fastapi==0.115.0
 uvicorn[standard]==0.32.0
 python-multipart==0.0.12
 yt-dlp
-openai-whisper
-torch --index-url https://download.pytorch.org/whl/cpu
-boto3
-python-dotenv==1.0.1
-aiofiles==24.1.0
 sqlalchemy==2.0.36
 pydantic-settings==2.6.0
 psycopg2-binary
+aiofiles==24.1.0
+boto3
+# Whisper - CPU only (no CUDA)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.2.2+cpu
+openai-whisper
