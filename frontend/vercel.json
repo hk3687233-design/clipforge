@@ -2,6 +2,7 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
+  "alias": ["getclipforge.vercel.app"],
   "env": {
     "NEXT_PUBLIC_API_URL": "https://clipforge-production-8733.up.railway.app"
   }
