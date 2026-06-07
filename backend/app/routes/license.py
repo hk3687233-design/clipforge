@@ -116,27 +116,23 @@ def verify_license(req: VerifyRequest, db: Session = Depends(get_db)):
 
 @router.post("/api/license/free-signup")
 def free_signup(req: FreeSignupRequest, db: Session = Depends(get_db)):
-    """Free plan signup — generate CF-FREE key, send email, return key."""
+    """Free plan signup — store email, return access token. No email sent, no key shown."""
     email = req.email.strip().lower()
     if not email or "@" not in email:
         raise HTTPException(400, "Invalid email address")
 
-    # Check if email already has a free key
+    # Check if email already registered
     existing = db.query(License).filter(License.email == email, License.plan == "free").first()
     if existing and existing.is_valid:
-        # Resend the existing key
-        send_license_email(email, existing.key, "free")
         return {"key": existing.key, "plan": "free", "existing": True}
 
-    # Generate new free key
+    # Generate internal access key (not shown to user)
     key = _generate_key("free")
     lic = License(key=key, email=email, plan="free", is_valid=True)
     db.add(lic)
     db.commit()
 
-    # Send welcome email with key
-    send_license_email(email, key, "free")
-
+    # No email sent — direct access granted
     return {"key": key, "plan": "free", "existing": False}
 
 

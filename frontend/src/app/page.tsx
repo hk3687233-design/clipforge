@@ -414,7 +414,7 @@ export default function Home() {
                 <Zap size={24} className="text-brand-400" />
               </div>
               <h2 className="text-xl font-black mb-1">Start Free Plan</h2>
-              <p className="text-white/40 text-sm">Enter your email — we'll send your free license key instantly.</p>
+              <p className="text-white/40 text-sm">Enter your email to get instant free access.</p>
             </div>
             <div className="space-y-3">
               <input
@@ -433,9 +433,9 @@ export default function Home() {
                 className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-all flex items-center justify-center gap-2"
               >
                 {freeLoading ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} />}
-                {freeLoading ? "Sending your key..." : "Get Free Access"}
+                {freeLoading ? "Setting up access..." : "Get Free Access →"}
               </button>
-              <p className="text-white/25 text-xs text-center">Your license key will arrive in your inbox within seconds.</p>
+              <p className="text-white/25 text-xs text-center">No credit card · Instant access · 5 clips per video</p>
             </div>
           </div>
         </div>

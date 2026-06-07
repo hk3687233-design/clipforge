@@ -173,12 +173,12 @@ export default function AdminPanel() {
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           {[
-            { label: "Total Licenses", value: stats.licenses?.total ?? 0, icon: <Key size={16}/>, color: "text-brand-400" },
-            { label: "Pro", value: stats.licenses?.pro ?? 0, icon: <Zap size={16}/>, color: "text-purple-400" },
-            { label: "Free", value: stats.licenses?.free ?? 0, icon: <Users size={16}/>, color: "text-blue-400" },
+            { label: "Total Users", value: stats.licenses?.total ?? 0, icon: <Key size={16}/>, color: "text-brand-400" },
+            { label: "Pro Users", value: stats.licenses?.pro ?? 0, icon: <Zap size={16}/>, color: "text-purple-400" },
+            { label: "Free Users", value: stats.licenses?.free ?? 0, icon: <Users size={16}/>, color: "text-blue-400" },
             { label: "Active", value: stats.licenses?.active ?? 0, icon: <CheckCircle2 size={16}/>, color: "text-green-400" },
-            { label: "Total Jobs", value: stats.jobs?.total ?? 0, icon: <BarChart2 size={16}/>, color: "text-yellow-400" },
-            { label: "Revenue", value: `$${(stats.licenses?.pro ?? 0) * 29}`, icon: <TrendingUp size={16}/>, color: "text-emerald-400" },
+            { label: "Jobs Done", value: stats.jobs?.done ?? 0, icon: <BarChart2 size={16}/>, color: "text-green-400" },
+            { label: "Jobs Failed", value: stats.jobs?.failed ?? 0, icon: <XCircle size={16}/>, color: "text-red-400" },
           ].map((s, i) => (
             <div key={i} className="glass rounded-2xl p-5 text-center border border-white/8">
               <div className={`flex justify-center mb-2 ${s.color}`}>{s.icon}</div>
@@ -189,7 +189,7 @@ export default function AdminPanel() {
         </div>
       )}
 
-      <div className="grid lg:grid-cols-3 gap-6 mb-8">
+      <div className="grid lg:grid-cols-2 gap-6 mb-8">
         {/* Generate License */}
         <div className="glass rounded-2xl p-6 border border-white/8">
           <h2 className="font-bold text-white/90 flex items-center gap-2 mb-5">
@@ -205,7 +205,7 @@ export default function AdminPanel() {
               </select>
             </div>
             <div>
-              <label className="text-white/40 text-xs mb-1 block">Email (sends key via email)</label>
+              <label className="text-white/40 text-xs mb-1 block">Email (optional)</label>
               <input type="email" value={genEmail} onChange={e => setGenEmail(e.target.value)}
                 placeholder="user@example.com"
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-500/50"
@@ -225,39 +225,25 @@ export default function AdminPanel() {
           </div>
         </div>
 
-        {/* Revenue */}
-        <div className="glass rounded-2xl p-6 border border-white/8 lg:col-span-2">
+        {/* Jobs Stats */}
+        <div className="glass rounded-2xl p-6 border border-white/8">
           <h2 className="font-bold text-white/90 flex items-center gap-2 mb-5">
-            <TrendingUp size={16} className="text-brand-400" /> Revenue Overview
+            <BarChart2 size={16} className="text-brand-400" /> Jobs Overview
           </h2>
           {stats && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="flex items-center justify-between p-4 bg-white/3 rounded-xl">
-                <div>
-                  <p className="text-white/50 text-xs">Pro Licenses Sold</p>
-                  <p className="text-3xl font-black text-white">{stats.licenses?.pro ?? 0}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-white/50 text-xs">Total Revenue @ $29</p>
-                  <p className="text-3xl font-black text-emerald-400">${(stats.licenses?.pro ?? 0) * 29}</p>
-                </div>
+                <p className="text-white/50 text-sm">Total Jobs</p>
+                <p className="text-3xl font-black text-white">{stats.jobs?.total ?? 0}</p>
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="p-3 bg-white/3 rounded-xl text-center">
-                  <p className="text-white/40 text-xs">Jobs Done</p>
-                  <p className="text-xl font-bold text-white">{stats.jobs?.done ?? 0}</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 bg-green-500/5 border border-green-500/10 rounded-xl text-center">
+                  <p className="text-white/40 text-xs mb-1">Completed</p>
+                  <p className="text-2xl font-bold text-green-400">{stats.jobs?.done ?? 0}</p>
                 </div>
-                <div className="p-3 bg-white/3 rounded-xl text-center">
-                  <p className="text-white/40 text-xs">Jobs Failed</p>
-                  <p className="text-xl font-bold text-red-400">{stats.jobs?.failed ?? 0}</p>
-                </div>
-                <div className="p-3 bg-white/3 rounded-xl text-center">
-                  <p className="text-white/40 text-xs">Active Rate</p>
-                  <p className="text-xl font-bold text-white">
-                    {(stats.licenses?.total ?? 0) > 0
-                      ? Math.round(((stats.licenses?.active ?? 0) / stats.licenses.total) * 100)
-                      : 0}%
-                  </p>
+                <div className="p-4 bg-red-500/5 border border-red-500/10 rounded-xl text-center">
+                  <p className="text-white/40 text-xs mb-1">Failed</p>
+                  <p className="text-2xl font-bold text-red-400">{stats.jobs?.failed ?? 0}</p>
                 </div>
               </div>
             </div>
