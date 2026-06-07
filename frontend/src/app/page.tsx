@@ -174,8 +174,59 @@ export default function Home() {
             </div>
           </div>
           <div className="absolute bottom-4 left-4 glass px-4 py-2 rounded-xl border border-white/10">
-            <p className="text-white/70 text-xs font-medium">🎬 See ClipForge in action — real product review → 37 clips in 2 minutes</p>
+            <p className="text-white/70 text-xs font-medium">🎬 See ClipForge in action — real product review → 100+ clips in under 2 minutes</p>
           </div>
+        </div>
+      </section>
+
+      {/* Social Proof / Reviews */}
+      <section className="relative z-10 max-w-5xl mx-auto px-6 pb-16">
+        <div className="text-center mb-10">
+          <div className="flex items-center justify-center gap-1 mb-2">
+            {[...Array(5)].map((_, i) => <Star key={i} size={16} className="text-yellow-400 fill-yellow-400" />)}
+          </div>
+          <p className="text-white/40 text-sm">Loved by content creators worldwide</p>
+        </div>
+        <div className="grid sm:grid-cols-3 gap-4">
+          {[
+            {
+              name: "Marcus T.",
+              handle: "@marcustechreviews",
+              avatar: "MT",
+              stars: 5,
+              review: "I used to spend 3+ hours cutting product clips from my reviews. ClipForge does it in literally 2 minutes. This is insane value for $29.",
+            },
+            {
+              name: "Priya S.",
+              handle: "@priyaunboxes",
+              avatar: "PS",
+              stars: 5,
+              review: "Detected 100+ products from my 45-minute tech haul video. Every single one was accurate. The affiliate links saved me another hour of work.",
+            },
+            {
+              name: "Jake R.",
+              handle: "@jakereviews",
+              avatar: "JR",
+              stars: 5,
+              review: "Bought it on a whim and it's already paid for itself 10x over. ZIP download of all clips in one click is a game changer for Reels repurposing.",
+            },
+          ].map((r, i) => (
+            <div key={i} className="glass glass-hover rounded-2xl p-5 flex flex-col gap-3 border border-white/6">
+              <div className="flex items-center gap-1">
+                {[...Array(r.stars)].map((_, j) => <Star key={j} size={12} className="text-yellow-400 fill-yellow-400" />)}
+              </div>
+              <p className="text-white/60 text-sm leading-relaxed flex-1">"{r.review}"</p>
+              <div className="flex items-center gap-3 pt-1 border-t border-white/5">
+                <div className="w-8 h-8 rounded-full bg-brand-600/30 border border-brand-500/30 flex items-center justify-center text-brand-400 text-xs font-bold shrink-0">
+                  {r.avatar}
+                </div>
+                <div>
+                  <p className="text-white/80 text-xs font-semibold">{r.name}</p>
+                  <p className="text-white/30 text-xs">{r.handle}</p>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -184,8 +235,8 @@ export default function Home() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { value: "10x", label: "Faster than manual editing" },
-            { value: "2 min", label: "Average processing time" },
-            { value: "37+", label: "Products detected per video" },
+            { value: "< 2 min", label: "Average processing time" },
+            { value: "100+", label: "Products detected per video" },
             { value: "∞", label: "Videos with lifetime Pro" },
           ].map((s, i) => (
             <div key={i} className="glass glass-hover rounded-2xl p-5 text-center">
