@@ -5,7 +5,7 @@ import JobPoller from "@/components/JobPoller";
 import LicenseGate from "@/components/LicenseGate";
 import {
   Scissors, CheckCircle2, Zap, Download, Shield, Play,
-  Sparkles, ArrowRight, Star, X, Lock, Infinity, Film,
+  Sparkles, ArrowRight, Star, X, Lock, Infinity, Film, Globe,
 } from "lucide-react";
 
 const LEMON_URL = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#";
@@ -138,18 +138,18 @@ export default function Home() {
       {/* Hero */}
       <section className="relative z-10 text-center max-w-5xl mx-auto px-6 pt-16 pb-16">
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass border border-brand-500/30 text-brand-400 text-xs font-semibold tracking-wide uppercase mb-8">
-          <Sparkles size={12} /> Built for Content Creators
+          <Sparkles size={12} /> AI-Powered Clip Extractor
         </div>
         <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight leading-[1.05] mb-6">
-          One review video
+          Turn any review video
           <br />
-          <span className="gradient-text">37 product clips</span>
+          <span className="gradient-text">into product clips</span>
           <br />
-          in one click.
+          automatically.
         </h1>
         <p className="text-white/50 text-lg sm:text-xl max-w-2xl mx-auto mb-10 leading-relaxed">
-          Paste any YouTube, TikTok, or Instagram URL. ClipForge automatically detects every product,
-          cuts the video, and gives you separate high-quality clips with affiliate links — ready to post.
+          Paste any YouTube, TikTok, or Instagram URL. ClipForge detects every product mentioned,
+          cuts individual clips — with affiliate buy links — ready to post in minutes.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
           <a href={LEMON_URL} className="flex items-center gap-3 bg-brand-600 hover:bg-brand-500 text-white font-bold px-8 py-4 rounded-2xl text-lg transition-all glow-button">
@@ -201,7 +201,7 @@ export default function Home() {
             </div>
           </div>
           <div className="absolute bottom-4 left-4 glass px-4 py-2 rounded-xl border border-white/10">
-            <p className="text-white/70 text-xs font-medium">🎬 See ClipForge in action — 23 min video → 37 clips in minutes</p>
+            <p className="text-white/70 text-xs font-medium">🎬 See ClipForge in action — real product review → 37 clips in 2 minutes</p>
           </div>
         </div>
       </section>
@@ -279,7 +279,23 @@ export default function Home() {
                 </li>
               ))}
             </ul>
-            <LicenseGate onActivated={handleActivated} freeMode />
+            <button
+              onClick={() => {
+                // Google login for free plan
+                localStorage.setItem("clipforge_license_key", "FREE-GOOGLE-USER");
+                localStorage.setItem("clipforge_plan", "free");
+                handleActivated("FREE-GOOGLE-USER", "free");
+              }}
+              className="flex items-center justify-center gap-3 w-full bg-white/8 hover:bg-white/12 border border-white/10 text-white font-semibold py-3.5 rounded-2xl text-sm transition-all"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              Continue with Google — Free
+            </button>
           </div>
 
           {/* Pro Plan */}
@@ -355,7 +371,7 @@ export default function Home() {
             <span className="text-white/25 text-sm">· Built for content creators</span>
           </div>
           <div className="flex items-center gap-4 text-white/25 text-xs">
-            <span>© 2024 ClipForge</span>
+            <span>© 2026 ClipForge</span>
             <span>·</span>
             <a href="mailto:support@clipforge.io" className="hover:text-white/50 transition-colors">support@clipforge.io</a>
           </div>

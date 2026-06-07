@@ -261,3 +261,17 @@ def admin_disable_license(
     lic.is_valid = False
     db.commit()
     return {"disabled": True}
+
+
+@router.patch("/api/admin/licenses/{key}/enable")
+def admin_enable_license(
+    key: str,
+    db: Session = Depends(get_db),
+    _: None = Depends(_check_admin),
+):
+    lic = db.query(License).filter(License.key == key).first()
+    if not lic:
+        raise HTTPException(404, "License not found")
+    lic.is_valid = True
+    db.commit()
+    return {"enabled": True}
