@@ -34,6 +34,9 @@ class ActivateRequest(BaseModel):
 class VerifyRequest(BaseModel):
     key: str
 
+class FreeSignupRequest(BaseModel):
+    email: str
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -109,6 +112,32 @@ def verify_license(req: VerifyRequest, db: Session = Depends(get_db)):
     if not lic or not lic.is_valid:
         raise HTTPException(403, "Invalid license")
     return {"valid": True, "plan": lic.plan}
+
+
+@router.post("/api/license/free-signup")
+def free_signup(req: FreeSignupRequest, db: Session = Depends(get_db)):
+    """Free plan signup — generate CF-FREE key, send email, return key."""
+    email = req.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(400, "Invalid email address")
+
+    # Check if email already has a free key
+    existing = db.query(License).filter(License.email == email, License.plan == "free").first()
+    if existing and existing.is_valid:
+        # Resend the existing key
+        send_license_email(email, existing.key, "free")
+        return {"key": existing.key, "plan": "free", "existing": True}
+
+    # Generate new free key
+    key = _generate_key("free")
+    lic = License(key=key, email=email, plan="free", is_valid=True)
+    db.add(lic)
+    db.commit()
+
+    # Send welcome email with key
+    send_license_email(email, key, "free")
+
+    return {"key": key, "plan": "free", "existing": False}
 
 
 @router.post("/api/license/webhook")
