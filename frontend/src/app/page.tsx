@@ -142,7 +142,7 @@ export default function Home() {
           <span className="line-through text-white/25 text-sm">$99</span>
           <span className="text-green-400 font-semibold text-sm">70% off — Launch price</span>
         </div>
-        <p className="text-white/25 text-sm">One-time payment · No subscription · No API costs</p>
+        <p className="text-white/25 text-sm">One-time payment · No subscription · No hidden fees</p>
         <div className="flex items-center justify-center gap-6 mt-6 flex-wrap">
           {[
             { icon: <Star size={14} className="text-yellow-400 fill-yellow-400" />, text: "4.9/5 from creators" },
@@ -184,7 +184,7 @@ export default function Home() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { value: "10x", label: "Faster than manual editing" },
-            { value: "$0", label: "API costs — 100% free stack" },
+            { value: "2 min", label: "Average processing time" },
             { value: "37+", label: "Products detected per video" },
             { value: "∞", label: "Videos with lifetime Pro" },
           ].map((s, i) => (
@@ -205,7 +205,7 @@ export default function Home() {
         <div className="grid sm:grid-cols-3 gap-6">
           {[
             { icon: <Play size={22} />, step: "01", title: "Paste any video URL", body: "YouTube, TikTok, Instagram, or upload directly. ClipForge downloads and processes in the background." },
-            { icon: <Sparkles size={22} />, step: "02", title: "AI detects every product", body: "Reads YouTube chapters and affiliate links from description. Finds every product transition automatically — instant and 100% accurate." },
+            { icon: <Sparkles size={22} />, step: "02", title: "AI detects every product", body: "Advanced AI reads video chapters, descriptions, and timestamps. Finds every product transition automatically — instant and highly accurate." },
             { icon: <Download size={22} />, step: "03", title: "Download your clips", body: "Get individual high-quality MP4 clips or download all in one ZIP. Each clip comes with its affiliate buy link." },
           ].map((s) => (
             <div key={s.step} className="glass glass-hover rounded-2xl p-6 relative overflow-hidden">
@@ -309,7 +309,7 @@ export default function Home() {
           {[
             { q: "Does it work with any video?", a: "Yes — YouTube, TikTok, Instagram Reels, and direct MP4 uploads are all supported. Best results with product review videos that have descriptions." },
             { q: "How accurate is the product detection?", a: "For YouTube videos with chapters: 100% accurate, instant. For videos with timestamps in description: very accurate. For others: Whisper AI fallback is used." },
-            { q: "Do I need any API keys or subscriptions?", a: "No. ClipForge runs on a 100% free stack — YouTube chapters for detection and FFmpeg for video processing. Zero hidden costs." },
+            { q: "Do I need any API keys or subscriptions?", a: "No. ClipForge handles everything on our end — just paste a URL or upload a video and you're done. No setup required." },
             { q: "What is the difference between Free and Pro?", a: "Free plan allows 3 videos/day with max 5 clips each. Pro is unlimited — unlimited videos, unlimited clips, ZIP download, and affiliate link extraction." },
             { q: "Is this a one-time purchase?", a: "Yes. Pay $29 once, use forever. No monthly fees, no renewal, no surprises. Price goes up after launch." },
             { q: "Can I get a refund?", a: "Yes, 7-day no-questions-asked refund. Just email us." },
