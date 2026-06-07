@@ -1,9 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import {
-  Shield, Key, Users, TrendingUp, Copy, CheckCircle2,
+  Shield, Key, Users, Copy, CheckCircle2,
   XCircle, RefreshCw, Plus, Search, Eye, EyeOff, Zap,
-  Lock, BarChart2
+  Lock
 } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -171,14 +171,12 @@ export default function AdminPanel() {
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
           {[
             { label: "Total Users", value: stats.licenses?.total ?? 0, icon: <Key size={16}/>, color: "text-brand-400" },
             { label: "Pro Users", value: stats.licenses?.pro ?? 0, icon: <Zap size={16}/>, color: "text-purple-400" },
             { label: "Free Users", value: stats.licenses?.free ?? 0, icon: <Users size={16}/>, color: "text-blue-400" },
             { label: "Active", value: stats.licenses?.active ?? 0, icon: <CheckCircle2 size={16}/>, color: "text-green-400" },
-            { label: "Jobs Done", value: stats.jobs?.done ?? 0, icon: <BarChart2 size={16}/>, color: "text-green-400" },
-            { label: "Jobs Failed", value: stats.jobs?.failed ?? 0, icon: <XCircle size={16}/>, color: "text-red-400" },
           ].map((s, i) => (
             <div key={i} className="glass rounded-2xl p-5 text-center border border-white/8">
               <div className={`flex justify-center mb-2 ${s.color}`}>{s.icon}</div>
@@ -189,63 +187,36 @@ export default function AdminPanel() {
         </div>
       )}
 
-      <div className="grid lg:grid-cols-2 gap-6 mb-8">
-        {/* Generate License */}
-        <div className="glass rounded-2xl p-6 border border-white/8">
-          <h2 className="font-bold text-white/90 flex items-center gap-2 mb-5">
-            <Plus size={16} className="text-brand-400" /> Generate License
-          </h2>
-          <div className="space-y-3">
-            <div>
-              <label className="text-white/40 text-xs mb-1 block">Plan</label>
-              <select value={genPlan} onChange={e => setGenPlan(e.target.value as any)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50">
-                <option value="pro">Pro Lifetime</option>
-                <option value="free">Free</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-white/40 text-xs mb-1 block">Email (optional)</label>
-              <input type="email" value={genEmail} onChange={e => setGenEmail(e.target.value)}
-                placeholder="user@example.com"
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-500/50"
-              />
-            </div>
-            <button onClick={generateLicense} disabled={genLoading}
-              className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
-              {genLoading ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />} Generate Key
-            </button>
-            {genResult && (
-              <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2.5 cursor-pointer"
-                onClick={() => copy(genResult!)}>
-                <code className="text-green-400 text-xs flex-1 break-all">{genResult}</code>
-                {copied === genResult ? <CheckCircle2 size={14} className="text-green-400 shrink-0" /> : <Copy size={14} className="text-white/40 shrink-0" />}
-              </div>
-            )}
+      {/* Generate License */}
+      <div className="glass rounded-2xl p-6 border border-white/8 mb-8 max-w-lg">
+        <h2 className="font-bold text-white/90 flex items-center gap-2 mb-5">
+          <Plus size={16} className="text-brand-400" /> Generate License
+        </h2>
+        <div className="space-y-3">
+          <div>
+            <label className="text-white/40 text-xs mb-1 block">Plan</label>
+            <select value={genPlan} onChange={e => setGenPlan(e.target.value as any)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50">
+              <option value="pro">Pro Lifetime</option>
+              <option value="free">Free</option>
+            </select>
           </div>
-        </div>
-
-        {/* Jobs Stats */}
-        <div className="glass rounded-2xl p-6 border border-white/8">
-          <h2 className="font-bold text-white/90 flex items-center gap-2 mb-5">
-            <BarChart2 size={16} className="text-brand-400" /> Jobs Overview
-          </h2>
-          {stats && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-4 bg-white/3 rounded-xl">
-                <p className="text-white/50 text-sm">Total Jobs</p>
-                <p className="text-3xl font-black text-white">{stats.jobs?.total ?? 0}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-4 bg-green-500/5 border border-green-500/10 rounded-xl text-center">
-                  <p className="text-white/40 text-xs mb-1">Completed</p>
-                  <p className="text-2xl font-bold text-green-400">{stats.jobs?.done ?? 0}</p>
-                </div>
-                <div className="p-4 bg-red-500/5 border border-red-500/10 rounded-xl text-center">
-                  <p className="text-white/40 text-xs mb-1">Failed</p>
-                  <p className="text-2xl font-bold text-red-400">{stats.jobs?.failed ?? 0}</p>
-                </div>
-              </div>
+          <div>
+            <label className="text-white/40 text-xs mb-1 block">Email (optional)</label>
+            <input type="email" value={genEmail} onChange={e => setGenEmail(e.target.value)}
+              placeholder="user@example.com"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-500/50"
+            />
+          </div>
+          <button onClick={generateLicense} disabled={genLoading}
+            className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
+            {genLoading ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />} Generate Key
+          </button>
+          {genResult && (
+            <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2.5 cursor-pointer"
+              onClick={() => copy(genResult!)}>
+              <code className="text-green-400 text-xs flex-1 break-all">{genResult}</code>
+              {copied === genResult ? <CheckCircle2 size={14} className="text-green-400 shrink-0" /> : <Copy size={14} className="text-white/40 shrink-0" />}
             </div>
           )}
         </div>

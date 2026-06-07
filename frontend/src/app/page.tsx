@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import LicenseGate from "@/components/LicenseGate";
 import {
@@ -26,6 +26,17 @@ export default function Home() {
     const saved = localStorage.getItem(LICENSE_KEY);
     setAlreadyLicensed(!!saved);
   }, []);
+
+  // Secret: 5 clicks on logo in 10 seconds → admin panel
+  const logoClicksRef = useRef<number[]>([]);
+  const handleLogoClick = () => {
+    const now = Date.now();
+    logoClicksRef.current = [...logoClicksRef.current, now].filter(t => now - t < 10000);
+    if (logoClicksRef.current.length >= 5) {
+      logoClicksRef.current = [];
+      router.push("/admin");
+    }
+  };
 
   const handleActivated = (key: string, p: string = "pro") => {
     localStorage.setItem(LICENSE_KEY, key);
@@ -74,12 +85,12 @@ export default function Home() {
 
       {/* Navbar */}
       <nav className="relative z-20 flex items-center justify-between max-w-6xl mx-auto px-6 py-5">
-        <div className="flex items-center gap-2.5">
+        <button onClick={handleLogoClick} className="flex items-center gap-2.5 select-none">
           <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center">
             <Scissors size={16} className="text-white" />
           </div>
           <span className="font-bold text-lg tracking-tight">ClipForge</span>
-        </div>
+        </button>
         <div className="flex items-center gap-3">
           <a href="#pricing" className="text-sm text-white/50 hover:text-white transition-colors hidden sm:block">Pricing</a>
           {alreadyLicensed ? (
