@@ -1,17 +1,30 @@
 import uuid
 import os
 import zipfile
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Header
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from app.database import get_db, Job, JobStatus
+from app.database import get_db, Job, JobStatus, License
 from app.services.downloader import is_supported_url
 from app.worker import process_video_job
 from app.config import settings
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+FREE_DAILY_LIMIT = 3
+FREE_CLIPS_LIMIT = 5
+
+
+def _get_license(x_license_key: Optional[str] = Header(None), db: Session = Depends(get_db)):
+    """Validate license key from header. Raises 401/403 if invalid."""
+    if not x_license_key:
+        raise HTTPException(401, "License key required. Get free access at getclipforge.vercel.app")
+    lic = db.query(License).filter(License.key == x_license_key).first()
+    if not lic or not lic.is_valid:
+        raise HTTPException(403, "Invalid or disabled license key")
+    return lic
 
 
 @router.post("/", status_code=201)
@@ -20,12 +33,25 @@ async def create_job(
     url: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
+    lic: License = Depends(_get_license),
 ):
     if not url and not file:
         raise HTTPException(400, "Provide either a URL or a video file")
 
     if url and not is_supported_url(url):
         raise HTTPException(400, "URL must be from TikTok, YouTube, or Instagram")
+
+    # Free plan: daily job limit check
+    if lic.plan == "free":
+        from datetime import date
+        from app.database import Job as JobModel
+        today_start = f"{date.today()}T00:00:00"
+        today_jobs = db.query(JobModel).filter(
+            JobModel.license_key == lic.key,
+            JobModel.created_at >= today_start,
+        ).count()
+        if today_jobs >= FREE_DAILY_LIMIT:
+            raise HTTPException(429, f"Free plan limit: {FREE_DAILY_LIMIT} videos per day. Upgrade to Pro for unlimited.")
 
     job_id = str(uuid.uuid4())
     local_path = None
@@ -52,14 +78,23 @@ async def create_job(
         status=JobStatus.pending,
         source_url=url,
         original_filename=file.filename if file else None,
+        license_key=lic.key,
     )
     db.add(job)
+    # Update usage counter
+    lic.jobs_used = (lic.jobs_used or 0) + 1
     db.commit()
 
-    # Run in FastAPI background (no Celery needed)
-    background_tasks.add_task(process_video_job, job_id=job_id, source_url=url, local_path=local_path)
+    # Pass plan so worker can enforce clip limit for free users
+    background_tasks.add_task(
+        process_video_job,
+        job_id=job_id,
+        source_url=url,
+        local_path=local_path,
+        max_clips=FREE_CLIPS_LIMIT if lic.plan == "free" else None,
+    )
 
-    return {"job_id": job_id, "status": "pending"}
+    return {"job_id": job_id, "status": "pending", "plan": lic.plan}
 
 
 @router.get("/{job_id}")

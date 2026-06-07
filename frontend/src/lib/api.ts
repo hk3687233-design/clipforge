@@ -40,8 +40,12 @@ export interface Job {
 }
 
 export async function submitJob(data: FormData): Promise<{ job_id: string }> {
+  const key = typeof window !== "undefined" ? (localStorage.getItem("clipforge_license_key") || "") : "";
   const res = await api.post("/jobs/", data, {
-    headers: { "Content-Type": "multipart/form-data" },
+    headers: {
+      "Content-Type": "multipart/form-data",
+      "X-License-Key": key,
+    },
   });
   return res.data;
 }

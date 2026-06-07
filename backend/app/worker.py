@@ -39,7 +39,7 @@ def _append_product(job_id: str, product: dict):
         db.close()
 
 
-def process_video_job(job_id: str, source_url: str = None, local_path: str = None):
+def process_video_job(job_id: str, source_url: str = None, local_path: str = None, max_clips: int = None):
     """Full pipeline: download → analyze → clip (one at a time, saving each) → done."""
     try:
         video_path = local_path
@@ -59,6 +59,10 @@ def process_video_job(job_id: str, source_url: str = None, local_path: str = Non
         if not products:
             _set_status(job_id, JobStatus.done, products=[])
             return
+
+        # Apply free plan clip limit
+        if max_clips:
+            products = products[:max_clips]
 
         # ── Step 3: Extract clips one-by-one (save each to DB) ───────────
         _set_status(job_id, JobStatus.extracting, products=[])
