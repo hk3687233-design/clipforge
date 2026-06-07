@@ -2,13 +2,11 @@ fastapi==0.115.0
 uvicorn[standard]==0.32.0
 python-multipart==0.0.12
 yt-dlp
-openai-whisper          # local Whisper — no API key needed
-torch                   # Whisper dependency (CPU-only fine for small/base models)
-boto3                   # Cloudflare R2 (S3-compatible)
+openai-whisper
+torch --index-url https://download.pytorch.org/whl/cpu
+boto3
 python-dotenv==1.0.1
 aiofiles==24.1.0
 sqlalchemy==2.0.36
-alembic==1.14.0
 pydantic-settings==2.6.0
-python-jose[cryptography]
-# psycopg2-binary     # uncomment for PostgreSQL in production
+psycopg2-binary
