@@ -59,7 +59,7 @@ def send_license_email(to_email: str, license_key: str, plan: str = "pro") -> bo
         </div>
       </div>
 
-      <a href="https://clipforge.io" style="display:block;background:linear-gradient(135deg,#7c3aed,#9333ea);color:#fff;text-align:center;padding:16px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">
+      <a href="https://getclipforge.vercel.app" style="display:block;background:linear-gradient(135deg,#7c3aed,#9333ea);color:#fff;text-align:center;padding:16px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">
         Start Using ClipForge →
       </a>
     </div>
