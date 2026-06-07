@@ -71,7 +71,7 @@ export default function ToolPage() {
                 href={LEMON_URL}
                 className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all glow-button"
               >
-                <Zap size={12} /> Upgrade to Pro — $29
+                <Zap size={12} /><span className="hidden sm:inline">Upgrade to Pro — </span>$29
               </a>
             )}
             <button

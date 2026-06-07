@@ -100,8 +100,8 @@ export default function Home() {
           ) : (
             <>
               <LicenseGate onActivated={handleActivated} inline />
-              <a href={LEMON_URL} className="hidden sm:flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-all glow-button">
-                <Zap size={14} /> Get Pro — $29
+              <a href={LEMON_URL} className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-xl transition-all glow-button">
+                <Zap size={14} /><span className="hidden sm:inline">Get Pro — </span>$29
               </a>
             </>
           )}
@@ -125,12 +125,12 @@ export default function Home() {
           cuts individual clips — with affiliate buy links — ready to post in minutes.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
-          <a href={LEMON_URL} className="flex items-center gap-3 bg-brand-600 hover:bg-brand-500 text-white font-bold px-8 py-4 rounded-2xl text-lg transition-all glow-button">
+          <a href={LEMON_URL} className="w-full sm:w-auto flex items-center gap-3 bg-brand-600 hover:bg-brand-500 text-white font-bold px-8 py-4 rounded-2xl text-lg transition-all glow-button">
             <Zap size={20} /> Get Pro Lifetime — $29 <ArrowRight size={18} />
           </a>
           <button
             onClick={() => setVideoOpen(true)}
-            className="flex items-center gap-3 glass border border-white/10 hover:border-brand-500/40 text-white font-semibold px-6 py-4 rounded-2xl text-base transition-all hover:bg-brand-500/10"
+            className="w-full sm:w-auto flex items-center gap-3 glass border border-white/10 hover:border-brand-500/40 text-white font-semibold px-6 py-4 rounded-2xl text-base transition-all hover:bg-brand-500/10"
           >
             <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center">
               <Play size={14} className="text-white ml-0.5" fill="white" />

@@ -125,7 +125,7 @@ export default function JobPoller({ jobId, onReset, plan = "pro" }: { jobId: str
       {/* Results */}
       {job?.status === "done" && job.products.length > 0 && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-0">
             <div>
               <h2 className="font-bold text-base text-white/90">
                 {job.products.length} Product{job.products.length !== 1 ? "s" : ""} Found
@@ -152,8 +152,8 @@ export default function JobPoller({ jobId, onReset, plan = "pro" }: { jobId: str
             {job.products.map((p, i) => {
               const locked = plan === "free" && i >= FREE_CLIP_LIMIT;
               return (
-                <div key={i} className={`glass rounded-2xl border p-4 flex items-center gap-4 ${locked ? "border-white/3 opacity-50" : "glass-hover border-white/6"}`}>
-                  <div className={`w-10 h-10 rounded-xl border flex items-center justify-center font-bold text-xs shrink-0 ${
+                <div key={i} className={`glass rounded-2xl border p-3 sm:p-4 flex items-center gap-2 sm:gap-4 ${locked ? "border-white/3 opacity-50" : "glass-hover border-white/6"}`}>
+                  <div className={`w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-xl border flex items-center justify-center font-bold text-xs ${
                     locked ? "bg-white/5 border-white/10 text-white/20" : "bg-brand-600/15 border-brand-500/20 text-brand-400"
                   }`}>
                     {locked ? <Lock size={14} /> : String(i + 1).padStart(2, "0")}
@@ -171,7 +171,7 @@ export default function JobPoller({ jobId, onReset, plan = "pro" }: { jobId: str
                   </div>
                   <div className="shrink-0 flex items-center gap-2">
                     {locked ? (
-                      <a href={LEMON_URL} className="flex items-center gap-1.5 bg-brand-600/20 border border-brand-500/30 text-brand-400 text-xs font-bold px-3 py-2.5 rounded-xl transition-all hover:bg-brand-600/30">
+                      <a href={LEMON_URL} className="flex items-center gap-1.5 bg-brand-600/20 border border-brand-500/30 text-brand-400 text-xs font-bold px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl transition-all hover:bg-brand-600/30">
                         <Lock size={11} /> Pro
                       </a>
                     ) : (
@@ -181,7 +181,7 @@ export default function JobPoller({ jobId, onReset, plan = "pro" }: { jobId: str
                             href={p.affiliate_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 text-orange-400 text-xs font-bold px-3 py-2.5 rounded-xl transition-all"
+                            className="flex items-center gap-1.5 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 text-orange-400 text-xs font-bold px-2 sm:px-3 py-2 sm:py-2.5 rounded-xl transition-all"
                           >
                             <ExternalLink size={12} /> Buy
                           </a>
@@ -190,7 +190,7 @@ export default function JobPoller({ jobId, onReset, plan = "pro" }: { jobId: str
                           <a
                             href={p.clip_url ?? getClipDownloadUrl(jobId, p.clip_filename!)}
                             download={p.clip_filename}
-                            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all"
+                            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all"
                           >
                             <Download size={13} /> Save
                           </a>

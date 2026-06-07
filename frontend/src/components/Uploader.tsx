@@ -88,7 +88,7 @@ export default function Uploader({ onJobCreated }: Props) {
           onDragLeave={() => setDragging(false)}
           onDrop={handleDrop}
           onClick={() => fileRef.current?.click()}
-          className={`cursor-pointer rounded-2xl border-2 border-dashed p-12 text-center transition-all ${
+          className={`cursor-pointer rounded-2xl border-2 border-dashed p-8 sm:p-12 text-center transition-all ${
             dragging
               ? "border-brand-500 bg-brand-500/10 scale-[1.01]"
               : "border-white/10 hover:border-brand-500/40 hover:bg-brand-500/5"

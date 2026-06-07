@@ -83,7 +83,7 @@ export default function LicenseGate({ onActivated, inline, freeMode }: Props) {
           <Key size={14} /> Activate License
         </button>
         {open && (
-          <div className="absolute right-0 top-10 w-80 glass border border-white/10 rounded-2xl p-4 shadow-2xl z-50 space-y-3">
+          <div className="fixed sm:absolute inset-x-4 sm:inset-x-auto sm:right-0 top-[4.5rem] sm:top-10 w-auto sm:w-80 z-50 glass border border-white/10 rounded-2xl p-4 shadow-2xl space-y-3">
             <p className="text-sm font-semibold text-white/90">Enter your license key</p>
             <input
               type="text"
@@ -129,13 +129,13 @@ export default function LicenseGate({ onActivated, inline, freeMode }: Props) {
   }
 
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-col sm:flex-row gap-2">
       <input
         type="text"
         value={key}
         onChange={(e) => setKey(e.target.value)}
         placeholder="CF-PRO-XXXXXX-XXXXXX-XXXXXX"
-        className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-brand-500 w-64 placeholder:text-white/20"
+        className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-brand-500 w-full sm:w-64 placeholder:text-white/20"
         onKeyDown={(e) => e.key === "Enter" && handleActivate()}
       />
       <button
