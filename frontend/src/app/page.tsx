@@ -1,20 +1,17 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import Uploader from "@/components/Uploader";
-import JobPoller from "@/components/JobPoller";
+import { useRouter } from "next/navigation";
 import LicenseGate from "@/components/LicenseGate";
 import {
   Scissors, CheckCircle2, Zap, Download, Shield, Play,
-  Sparkles, ArrowRight, Star, X, Lock, Infinity, Film, RefreshCw,
+  Sparkles, ArrowRight, Star, X, Lock, RefreshCw,
 } from "lucide-react";
 
 const LEMON_URL = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#";
 const LICENSE_KEY = "clipforge_license_key";
 
 export default function Home() {
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [licensed, setLicensed] = useState<boolean | null>(null);
-  const [plan, setPlan] = useState<"free" | "pro">("free");
+  const router = useRouter();
   const [videoOpen, setVideoOpen] = useState(false);
   const [freeModal, setFreeModal] = useState(false);
   const [freeEmail, setFreeEmail] = useState("");
@@ -23,19 +20,17 @@ export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+  // If already licensed, show "Go to Tool" option but still show landing page
+  const [alreadyLicensed, setAlreadyLicensed] = useState(false);
   useEffect(() => {
-    if (process.env.NODE_ENV === "development") { setLicensed(true); setPlan("pro"); return; }
     const saved = localStorage.getItem(LICENSE_KEY);
-    const savedPlan = localStorage.getItem("clipforge_plan") as "free" | "pro" || "free";
-    setLicensed(!!saved);
-    if (saved) setPlan(savedPlan);
+    setAlreadyLicensed(!!saved);
   }, []);
 
   const handleActivated = (key: string, p: string = "pro") => {
     localStorage.setItem(LICENSE_KEY, key);
     localStorage.setItem("clipforge_plan", p);
-    setLicensed(true);
-    setPlan(p as "free" | "pro");
+    router.push("/tool");
   };
 
   const handleFreeSignup = async () => {
@@ -64,84 +59,12 @@ export default function Home() {
     setFreeLoading(false);
   };
 
-  // Close video modal on ESC
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setVideoOpen(false); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  if (licensed === null) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
-
-  // ─── Tool View (Licensed) ─────────────────────────────────────────────────
-  if (licensed) {
-    return (
-      <div className="min-h-screen relative overflow-hidden">
-        <div className="orb w-96 h-96 bg-brand-600/20 top-0 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-        <div className="orb w-64 h-64 bg-purple-800/15 bottom-20 right-10" />
-        <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-4 py-16 gap-10">
-          {/* Header */}
-          <div className="w-full max-w-2xl flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center">
-                <Scissors size={16} className="text-white" />
-              </div>
-              <span className="font-bold text-lg tracking-tight">ClipForge</span>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ml-1 ${
-                plan === "pro"
-                  ? "bg-brand-500/20 text-brand-400 border border-brand-500/30"
-                  : "bg-white/5 text-white/30 border border-white/10"
-              }`}>
-                {plan === "pro" ? "PRO" : "FREE"}
-              </span>
-            </div>
-            {plan === "free" && (
-              <a href={LEMON_URL} className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all glow-button">
-                <Zap size={12} /> Upgrade to Pro — $29
-              </a>
-            )}
-          </div>
-
-          <div className="text-center space-y-4">
-            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
-              One video,{" "}
-              <span className="gradient-text-purple">every product</span>
-              <br />clipped instantly.
-            </h1>
-            <p className="text-white/40 max-w-md mx-auto text-sm">
-              Paste a YouTube, TikTok, or Instagram link. AI detects each product and exports separate high-quality clips.
-            </p>
-            {plan === "free" && (
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-yellow-400 text-xs font-medium">
-                <Lock size={12} /> Free plan: 3 clips max per video ·{" "}
-                <a href={LEMON_URL} className="underline underline-offset-2 font-bold">Upgrade for unlimited</a>
-              </div>
-            )}
-          </div>
-
-          <div className="w-full max-w-2xl">
-            {!jobId
-              ? <Uploader onJobCreated={setJobId} />
-              : <JobPoller jobId={jobId} onReset={() => setJobId(null)} plan={plan} />
-            }
-          </div>
-
-          <p className="text-xs text-white/20 flex items-center gap-3">
-            <span>YouTube</span><span className="w-1 h-1 bg-white/20 rounded-full inline-block" />
-            <span>TikTok</span><span className="w-1 h-1 bg-white/20 rounded-full inline-block" />
-            <span>Instagram</span><span className="w-1 h-1 bg-white/20 rounded-full inline-block" />
-            <span>Direct Upload</span>
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // ─── Landing Page ─────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen relative overflow-x-hidden">
       {/* BG orbs */}
@@ -159,10 +82,18 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-3">
           <a href="#pricing" className="text-sm text-white/50 hover:text-white transition-colors hidden sm:block">Pricing</a>
-          <LicenseGate onActivated={handleActivated} inline />
-          <a href={LEMON_URL} className="hidden sm:flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-all glow-button">
-            <Zap size={14} /> Get Pro — $29
-          </a>
+          {alreadyLicensed ? (
+            <a href="/tool" className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-all glow-button">
+              <Zap size={14} /> Open Tool
+            </a>
+          ) : (
+            <>
+              <LicenseGate onActivated={handleActivated} inline />
+              <a href={LEMON_URL} className="hidden sm:flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-all glow-button">
+                <Zap size={14} /> Get Pro — $29
+              </a>
+            </>
+          )}
         </div>
       </nav>
 
@@ -268,7 +199,7 @@ export default function Home() {
           ].map((s) => (
             <div key={s.step} className="glass glass-hover rounded-2xl p-6 relative overflow-hidden">
               <div className="absolute top-4 right-4 text-5xl font-black text-white/[0.03] select-none">{s.step}</div>
-              <div className="w-11 h-11 rounded-xl bg-brand-600/20 border border-brand-500/20 flex items-center justify-center text-brand-400 mb-5">{s.icon}</div>
+              <div className="w-11 h-11 rounded-xl bg-brand-600/20 border border-brand-500/20 flex items-center justify-content text-brand-400 mb-5">{s.icon}</div>
               <h3 className="font-bold text-base mb-2 text-white/90">{s.title}</h3>
               <p className="text-white/40 text-sm leading-relaxed">{s.body}</p>
             </div>
@@ -276,7 +207,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Pricing — 2 plans */}
+      {/* Pricing */}
       <section id="pricing" className="relative z-10 max-w-5xl mx-auto px-6 pb-24">
         <div className="text-center mb-14">
           <p className="text-brand-400 text-xs font-semibold tracking-widest uppercase mb-3">Pricing</p>
