@@ -1,11 +1,27 @@
 import yt_dlp
 import os
+import base64
+import tempfile
 from app.config import settings
 
 SUPPORTED_DOMAINS = ["tiktok.com", "youtube.com", "youtu.be", "instagram.com"]
 
 def is_supported_url(url: str) -> bool:
     return any(domain in url for domain in SUPPORTED_DOMAINS)
+
+def _get_cookies_file() -> str | None:
+    """Write YOUTUBE_COOKIES env var (base64 cookies.txt) to a temp file."""
+    cookies_b64 = os.environ.get("YOUTUBE_COOKIES", "")
+    if not cookies_b64:
+        return None
+    try:
+        cookies_data = base64.b64decode(cookies_b64).decode("utf-8")
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+        tmp.write(cookies_data)
+        tmp.close()
+        return tmp.name
+    except Exception:
+        return None
 
 def download_video(url: str, job_id: str) -> str:
     """Download video from URL using yt-dlp. Returns local file path."""
@@ -15,6 +31,8 @@ def download_video(url: str, job_id: str) -> str:
 
     is_youtube = "youtube.com" in url or "youtu.be" in url
     is_tiktok = "tiktok.com" in url
+
+    cookies_file = _get_cookies_file() if is_youtube else None
 
     ydl_opts = {
         "outtmpl": out_path,
@@ -31,50 +49,52 @@ def download_video(url: str, job_id: str) -> str:
                 "Chrome/124.0.0.0 Safari/537.36"
             ),
             "Accept-Language": "en-US,en;q=0.9",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
     }
 
+    if cookies_file:
+        ydl_opts["cookiefile"] = cookies_file
+
     if is_youtube:
-        ydl_opts.update({
-            # Use android client which bypasses bot detection
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android", "web"],
-                    "player_skip": ["webpage", "configs"],
-                }
-            },
-            # Age gate bypass
-            "age_limit": None,
-        })
+        ydl_opts["extractor_args"] = {
+            "youtube": {
+                "player_client": ["android", "tv_embedded"],
+                "player_skip": ["webpage"],
+            }
+        }
 
     if is_tiktok:
-        ydl_opts.update({
-            "extractor_args": {
-                "tiktok": {
-                    "api_hostname": "api22-normal-c-useast2a.tiktokv.com",
-                }
-            },
-        })
+        ydl_opts["extractor_args"] = {
+            "tiktok": {
+                "api_hostname": "api22-normal-c-useast2a.tiktokv.com",
+            }
+        }
 
-    # Try primary download
+    errors = []
+    # Try with current opts
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
     except Exception as e:
-        err = str(e)
-        # YouTube fallback: try with different client
-        if is_youtube and ("bot" in err.lower() or "sign in" in err.lower()):
-            ydl_opts_fallback = dict(ydl_opts)
-            ydl_opts_fallback["extractor_args"] = {
-                "youtube": {
-                    "player_client": ["tv_embedded", "ios"],
-                }
+        errors.append(str(e))
+        # YouTube fallback with ios client
+        if is_youtube:
+            fallback = dict(ydl_opts)
+            fallback["extractor_args"] = {
+                "youtube": {"player_client": ["ios", "mweb"]}
             }
-            with yt_dlp.YoutubeDL(ydl_opts_fallback) as ydl:
-                ydl.download([url])
+            try:
+                with yt_dlp.YoutubeDL(fallback) as ydl:
+                    ydl.download([url])
+            except Exception as e2:
+                errors.append(str(e2))
+                raise Exception(errors[-1])
         else:
             raise
+
+    # Clean up temp cookies file
+    if cookies_file and os.path.exists(cookies_file):
+        os.unlink(cookies_file)
 
     # Find the downloaded file
     for f in os.listdir(out_dir):
