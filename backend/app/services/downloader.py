@@ -4,7 +4,7 @@ import base64
 import tempfile
 from app.config import settings
 
-SUPPORTED_DOMAINS = ["tiktok.com", "youtube.com", "youtu.be", "instagram.com"]
+SUPPORTED_DOMAINS = ["tiktok.com", "youtube.com", "youtu.be", "instagram.com", "facebook.com", "fb.watch"]
 
 def is_supported_url(url: str) -> bool:
     return any(domain in url for domain in SUPPORTED_DOMAINS)
@@ -40,8 +40,8 @@ def download_video(url: str, job_id: str) -> str:
         "quiet": False,
         "no_warnings": False,
         "socket_timeout": 60,
-        "retries": 5,
-        "fragment_retries": 5,
+        "retries": 3,
+        "fragment_retries": 3,
         "http_headers": {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -60,49 +60,78 @@ def download_video(url: str, job_id: str) -> str:
             "tiktok": {"api_hostname": "api22-normal-c-useast2a.tiktokv.com"}
         }
 
-    # YouTube: try multiple player clients — tv_embedded is most permissive
+    # YouTube: try many combinations of player clients + formats
     if is_youtube:
         attempts = [
+            # 1. tv_embedded with 720p
             {**base_opts,
-             "format": "bestvideo[height<=720]+bestaudio/bestvideo+bestaudio/best",
+             "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]",
              "extractor_args": {"youtube": {"player_client": ["tv_embedded"]}}},
+            # 2. ios client — bypasses some bot detection
             {**base_opts,
-             "format": "bestvideo+bestaudio/best",
+             "format": "bestvideo[height<=720]+bestaudio/best",
              "extractor_args": {"youtube": {"player_client": ["ios"]}}},
+            # 3. android_vr — often not blocked
             {**base_opts,
-             "format": "best",
+             "format": "best[height<=720]/best",
              "extractor_args": {"youtube": {"player_client": ["android_vr"]}}},
+            # 4. web_creator
             {**base_opts,
              "format": "best",
              "extractor_args": {"youtube": {"player_client": ["web_creator"]}}},
-            # Final fallback — no format restriction
+            # 5. mweb — mobile web
             {**base_opts,
+             "format": "best",
              "extractor_args": {"youtube": {"player_client": ["mweb"]}}},
+            # 6. Format 18 (360p MP4) — almost always available, no merge needed
+            {**base_opts,
+             "format": "18",
+             "extractor_args": {"youtube": {"player_client": ["ios"]}}},
+            # 7. Format 18 with tv_embedded
+            {**base_opts,
+             "format": "18",
+             "extractor_args": {"youtube": {"player_client": ["tv_embedded"]}}},
+            # 8. Skip js player — use API directly
+            {**base_opts,
+             "format": "bestvideo+bestaudio/best",
+             "extractor_args": {"youtube": {
+                 "player_client": ["ios"],
+                 "player_skip": ["js", "configs", "webpage"],
+             }}},
+            # 9. android client
+            {**base_opts,
+             "format": "best",
+             "extractor_args": {"youtube": {"player_client": ["android"]}}},
+            # 10. No format restriction, no extractor args
+            {**base_opts},
         ]
     else:
         attempts = [
             {**base_opts, "format": "bestvideo[height<=1080]+bestaudio/best"},
             {**base_opts, "format": "best"},
-            {**base_opts},  # no format specified
+            {**base_opts},
         ]
 
     last_error = None
-    for attempt_opts in attempts:
+    for i, attempt_opts in enumerate(attempts):
         try:
+            print(f"[downloader] attempt {i+1}/{len(attempts)}")
             with yt_dlp.YoutubeDL(attempt_opts) as ydl:
                 ydl.download([url])
             last_error = None
+            print(f"[downloader] success on attempt {i+1}")
             break
         except Exception as e:
+            print(f"[downloader] attempt {i+1} failed: {e}")
             last_error = e
             continue
-
-    if last_error:
-        raise Exception(str(last_error))
 
     # Clean up temp cookies file
     if cookies_file and os.path.exists(cookies_file):
         os.unlink(cookies_file)
+
+    if last_error:
+        raise Exception(str(last_error))
 
     # Find the downloaded file
     for f in os.listdir(out_dir):
