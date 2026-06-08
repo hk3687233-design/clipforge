@@ -1,11 +1,29 @@
 "use client";
 import { useState, useRef, DragEvent } from "react";
-import { Upload, Link2, Loader2, Sparkles, Film } from "lucide-react";
+import { Upload, Link2, Loader2, Sparkles, Film, Youtube, Music2, Instagram } from "lucide-react";
 import { submitJob } from "@/lib/api";
 
 interface Props {
   onJobCreated: (jobId: string) => void;
 }
+
+type Platform = "youtube" | "tiktok" | "instagram" | "facebook" | null;
+
+function detectPlatform(url: string): Platform {
+  if (!url) return null;
+  if (/youtube\.com|youtu\.be/i.test(url)) return "youtube";
+  if (/tiktok\.com/i.test(url)) return "tiktok";
+  if (/instagram\.com/i.test(url)) return "instagram";
+  if (/facebook\.com|fb\.watch/i.test(url)) return "facebook";
+  return null;
+}
+
+const PLATFORM_CONFIG = {
+  youtube:   { label: "YouTube",   color: "bg-red-500/20 text-red-400 border-red-500/30",    icon: "▶" },
+  tiktok:    { label: "TikTok",    color: "bg-pink-500/20 text-pink-400 border-pink-500/30", icon: "♪" },
+  instagram: { label: "Instagram", color: "bg-purple-500/20 text-purple-400 border-purple-500/30", icon: "◈" },
+  facebook:  { label: "Facebook",  color: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: "f" },
+};
 
 export default function Uploader({ onJobCreated }: Props) {
   const [mode, setMode] = useState<"url" | "upload">("url");
@@ -15,6 +33,8 @@ export default function Uploader({ onJobCreated }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const platform = detectPlatform(url);
 
   const handleDrop = (e: DragEvent) => {
     e.preventDefault();
@@ -61,28 +81,52 @@ export default function Uploader({ onJobCreated }: Props) {
         ))}
       </div>
 
-      {/* Input area */}
+      {/* URL Input */}
       {mode === "url" ? (
-        <div className="glass rounded-2xl border border-white/8 focus-within:border-brand-500/50 transition-colors">
-          <div className="flex items-center gap-3 px-4 py-4">
-            <Link2 size={18} className="text-white/30 shrink-0" />
+        <div className={`glass rounded-2xl border transition-all ${
+          platform
+            ? `border-brand-500/50 bg-brand-500/5`
+            : "border-white/8 focus-within:border-brand-500/50"
+        }`}>
+          <div className="flex items-center gap-3 px-4 pt-4 pb-2">
+            {/* Platform icon */}
+            {platform ? (
+              <span className={`text-sm font-bold w-6 h-6 flex items-center justify-center rounded-lg border ${PLATFORM_CONFIG[platform].color}`}>
+                {PLATFORM_CONFIG[platform].icon}
+              </span>
+            ) : (
+              <Link2 size={18} className="text-white/30 shrink-0" />
+            )}
             <input
               type="url"
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste YouTube, TikTok, or Instagram URL..."
+              onChange={(e) => { setUrl(e.target.value); setError(""); }}
+              placeholder="Paste YouTube, TikTok, Instagram, or Facebook URL..."
               className="flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/25"
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
             />
+            {url && (
+              <button onClick={() => setUrl("")} className="text-white/20 hover:text-white/50 text-xs transition-colors shrink-0">✕</button>
+            )}
           </div>
-          {/* Supported platforms */}
+
+          {/* Platform badge or supported list */}
           <div className="px-4 pb-3 flex items-center gap-2">
-            {["YouTube", "TikTok", "Instagram"].map((p) => (
-              <span key={p} className="text-[10px] font-medium text-white/20 bg-white/5 px-2 py-0.5 rounded-full">{p}</span>
-            ))}
+            {platform ? (
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${PLATFORM_CONFIG[platform].color}`}>
+                ✓ {PLATFORM_CONFIG[platform].label} detected
+              </span>
+            ) : (
+              <>
+                {(["YouTube", "TikTok", "Instagram", "Facebook"] as const).map((p) => (
+                  <span key={p} className="text-[10px] font-medium text-white/20 bg-white/5 px-2 py-0.5 rounded-full">{p}</span>
+                ))}
+              </>
+            )}
           </div>
         </div>
       ) : (
+        /* Upload */
         <div
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
@@ -131,11 +175,15 @@ export default function Uploader({ onJobCreated }: Props) {
         className="w-full py-4 rounded-2xl bg-brand-600 hover:bg-brand-500 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-white text-base transition-all glow-button flex items-center justify-center gap-3"
       >
         {loading ? (
-          <><Loader2 size={18} className="animate-spin" /> Processing...</>
+          <><Loader2 size={18} className="animate-spin" /> Analyzing video...</>
         ) : (
           <><Sparkles size={18} /> Extract Product Clips</>
         )}
       </button>
+
+      <p className="text-center text-xs text-white/20">
+        Supports YouTube · TikTok · Instagram · Facebook · Direct Upload
+      </p>
     </div>
   );
 }

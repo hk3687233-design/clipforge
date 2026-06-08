@@ -37,9 +37,9 @@ def download_video(url: str, job_id: str) -> str:
     base_opts = {
         "outtmpl": out_path,
         "merge_output_format": "mp4",
-        "quiet": True,
-        "no_warnings": True,
-        "socket_timeout": 30,
+        "quiet": False,
+        "no_warnings": False,
+        "socket_timeout": 60,
         "retries": 5,
         "fragment_retries": 5,
         "http_headers": {
@@ -60,23 +60,31 @@ def download_video(url: str, job_id: str) -> str:
             "tiktok": {"api_hostname": "api22-normal-c-useast2a.tiktokv.com"}
         }
 
-    # YouTube: try multiple client + format combos in order
-    youtube_attempts = [
-        {**base_opts, "format": "bestvideo[height<=1080]+bestaudio/best",
-         "extractor_args": {"youtube": {"player_client": ["ios"]}}},
-        {**base_opts, "format": "bestvideo+bestaudio/best",
-         "extractor_args": {"youtube": {"player_client": ["android"]}}},
-        {**base_opts, "format": "best",
-         "extractor_args": {"youtube": {"player_client": ["mweb"]}}},
-        {**base_opts, "format": "worst"},   # last resort
-    ]
-
-    non_yt_attempts = [
-        {**base_opts, "format": "bestvideo[height<=1080]+bestaudio/best"},
-        {**base_opts, "format": "best"},
-    ]
-
-    attempts = youtube_attempts if is_youtube else non_yt_attempts
+    # YouTube: try multiple player clients — tv_embedded is most permissive
+    if is_youtube:
+        attempts = [
+            {**base_opts,
+             "format": "bestvideo[height<=720]+bestaudio/bestvideo+bestaudio/best",
+             "extractor_args": {"youtube": {"player_client": ["tv_embedded"]}}},
+            {**base_opts,
+             "format": "bestvideo+bestaudio/best",
+             "extractor_args": {"youtube": {"player_client": ["ios"]}}},
+            {**base_opts,
+             "format": "best",
+             "extractor_args": {"youtube": {"player_client": ["android_vr"]}}},
+            {**base_opts,
+             "format": "best",
+             "extractor_args": {"youtube": {"player_client": ["web_creator"]}}},
+            # Final fallback — no format restriction
+            {**base_opts,
+             "extractor_args": {"youtube": {"player_client": ["mweb"]}}},
+        ]
+    else:
+        attempts = [
+            {**base_opts, "format": "bestvideo[height<=1080]+bestaudio/best"},
+            {**base_opts, "format": "best"},
+            {**base_opts},  # no format specified
+        ]
 
     last_error = None
     for attempt_opts in attempts:
@@ -84,7 +92,7 @@ def download_video(url: str, job_id: str) -> str:
             with yt_dlp.YoutubeDL(attempt_opts) as ydl:
                 ydl.download([url])
             last_error = None
-            break   # success
+            break
         except Exception as e:
             last_error = e
             continue

@@ -96,11 +96,22 @@ export default function AdminPanel() {
     setGenLoading(true);
     setGenResult(null);
     try {
-      const url = `${API}/api/admin/licenses/generate?plan=${genPlan}${genEmail ? `&email=${encodeURIComponent(genEmail)}` : ""}`;
-      const r = await fetch(url, { method: "POST", headers: h() });
-      const data = await r.json();
-      setGenResult(data.key || data.license_key || JSON.stringify(data));
-    } catch { setGenResult("Network error"); }
+      const params = new URLSearchParams({ plan: genPlan });
+      if (genEmail.trim()) params.append("email", genEmail.trim());
+      const r = await fetch(`${API}/api/admin/licenses/generate?${params}`, {
+        method: "POST",
+        headers: h(),
+      });
+      if (!r.ok) {
+        const err = await r.text();
+        setGenResult(`Error ${r.status}: ${err}`);
+      } else {
+        const data = await r.json();
+        setGenResult(data.key || data.license_key || JSON.stringify(data));
+      }
+    } catch (e: any) {
+      setGenResult(`Network error: ${e?.message || "Check API URL"}`);
+    }
     setGenLoading(false);
   };
 
