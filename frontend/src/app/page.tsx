@@ -430,6 +430,7 @@ export default function Home() {
           <p className="text-white/45 text-base sm:text-lg max-w-xl mx-auto mb-8 leading-relaxed">
             One video. 100+ clips. Done in 2 minutes. For $29 — once, forever.
           </p>
+          <p className="text-brand-400/60 text-xs mb-6 font-mono tracking-wider">getclipforge.online</p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <a href={LEMON_URL} className="w-full sm:w-auto flex items-center justify-center gap-3 bg-brand-600 hover:bg-brand-500 text-white font-bold px-10 py-4 rounded-2xl text-lg transition-all glow-button">
               <Zap size={20} /> Get Lifetime Access — $29
@@ -455,7 +456,7 @@ export default function Home() {
           <div className="flex items-center gap-4 text-white/25 text-xs">
             <span>© 2026 ClipForge</span>
             <span>·</span>
-            <a href="mailto:support@clipforge.io" className="hover:text-white/50 transition-colors">support@clipforge.io</a>
+            <a href="mailto:support@getclipforge.online" className="hover:text-white/50 transition-colors">support@getclipforge.online</a>
           </div>
           <LicenseGate onActivated={handleActivated} />
         </div>

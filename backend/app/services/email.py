@@ -46,7 +46,7 @@ def send_license_email(to_email: str, license_key: str, plan: str = "pro") -> bo
         <div style="display:flex;flex-direction:column;gap:12px;">
           <div style="display:flex;align-items:flex-start;gap:12px;">
             <div style="width:24px;height:24px;background:rgba(124,58,237,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;font-weight:700;color:#a78bfa;">1</div>
-            <p style="margin:0;color:rgba(255,255,255,0.6);font-size:14px;">Go to <strong style="color:#fff;">clipforge.io</strong></p>
+            <p style="margin:0;color:rgba(255,255,255,0.6);font-size:14px;">Go to <strong style="color:#fff;">getclipforge.online</strong></p>
           </div>
           <div style="display:flex;align-items:flex-start;gap:12px;">
             <div style="width:24px;height:24px;background:rgba(124,58,237,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;font-weight:700;color:#a78bfa;">2</div>
@@ -59,7 +59,7 @@ def send_license_email(to_email: str, license_key: str, plan: str = "pro") -> bo
         </div>
       </div>
 
-      <a href="https://getclipforge.vercel.app" style="display:block;background:linear-gradient(135deg,#7c3aed,#9333ea);color:#fff;text-align:center;padding:16px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">
+      <a href="https://getclipforge.online" style="display:block;background:linear-gradient(135deg,#7c3aed,#9333ea);color:#fff;text-align:center;padding:16px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">
         Start Using ClipForge →
       </a>
     </div>
