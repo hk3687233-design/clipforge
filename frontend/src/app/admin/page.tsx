@@ -14,6 +14,8 @@ interface License {
   email: string | null;
   jobs_used: number;
   is_valid: boolean;
+  device_bound: boolean;
+  activated_at: string | null;
   created_at: string;
 }
 
@@ -280,10 +282,14 @@ export default function AdminPanel() {
                       {l.created_at ? new Date(l.created_at).toLocaleDateString() : "—"}
                     </td>
                     <td className="px-5 py-3">
-                      {l.is_valid
-                        ? <span className="flex items-center gap-1 text-green-400 text-xs"><CheckCircle2 size={12} /> Active</span>
-                        : <span className="flex items-center gap-1 text-red-400 text-xs"><XCircle size={12} /> Disabled</span>
-                      }
+                      <div className="flex flex-col gap-1">
+                        {l.is_valid
+                          ? <span className="flex items-center gap-1 text-green-400 text-xs"><CheckCircle2 size={12} /> Active</span>
+                          : <span className="flex items-center gap-1 text-red-400 text-xs"><XCircle size={12} /> Disabled</span>}
+                        {l.device_bound
+                          ? <span className="text-yellow-500/70 text-[10px]">🔒 Device locked</span>
+                          : <span className="text-white/20 text-[10px]">○ Not activated</span>}
+                      </div>
                     </td>
                     <td className="px-5 py-3">
                       <button

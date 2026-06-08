@@ -1,16 +1,19 @@
 import axios from "axios";
+import { getDeviceFingerprint } from "./fingerprint";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const api = axios.create({ baseURL: `${API_BASE}/api` });
 
 export async function activateLicense(key: string): Promise<{ valid: boolean; plan: string }> {
-  const res = await api.post("/license/activate", { key });
+  const device_id = getDeviceFingerprint();
+  const res = await api.post("/license/activate", { key, device_id });
   return res.data;
 }
 
 export async function verifyLicense(key: string): Promise<boolean> {
   try {
-    await api.post("/license/verify", { key });
+    const device_id = getDeviceFingerprint();
+    await api.post("/license/verify", { key, device_id });
     return true;
   } catch {
     return false;

@@ -42,6 +42,8 @@ class License(Base):
     instance_id = Column(String, nullable=True)    # Lemon Squeezy instance
     order_id = Column(String, nullable=True)
     jobs_used = Column(Integer, default=0)
+    device_id = Column(String, nullable=True)      # fingerprint of first device that activated
+    activated_at = Column(DateTime, nullable=True) # when key was first activated
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

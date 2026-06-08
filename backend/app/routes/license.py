@@ -1,7 +1,7 @@
 """
 License management:
   POST /api/license/activate  — validate key with Lemon Squeezy, save to DB
-  POST /api/license/verify    — fast local DB check
+  POST /api/license/verify    — fast local DB check (with device binding)
   POST /api/license/webhook   — Lemon Squeezy order webhook -> generate key + send email
   GET  /api/admin/licenses    — admin: list all licenses
   GET  /api/admin/stats       — admin: dashboard stats
@@ -10,6 +10,7 @@ import hmac
 import hashlib
 import json
 import uuid
+import re
 import urllib.request
 import urllib.parse
 from datetime import datetime
@@ -17,6 +18,8 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, Request, Header
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from typing import Optional
 
 from app.database import get_db, License, Job
@@ -24,15 +27,21 @@ from app.config import settings
 from app.services.email import send_license_email
 
 router = APIRouter(tags=["license"])
+limiter = Limiter(key_func=get_remote_address)
+
+# Key format: CF-PRO-XXXXXX-XXXXXX-XXXXXX or CF-FREE-XXXXXX-XXXXXX-XXXXXX
+KEY_PATTERN = re.compile(r"^CF-(PRO|FREE)-[A-Z0-9]{6}-[A-Z0-9]{6}-[A-Z0-9]{6}$")
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────
 
 class ActivateRequest(BaseModel):
     key: str
+    device_id: Optional[str] = None   # browser fingerprint
 
 class VerifyRequest(BaseModel):
     key: str
+    device_id: Optional[str] = None   # browser fingerprint
 
 class FreeSignupRequest(BaseModel):
     email: str
@@ -77,29 +86,50 @@ def _ls_validate(key: str) -> dict:
 # ── Routes ─────────────────────────────────────────────────────────────────
 
 @router.post("/api/license/activate")
-def activate_license(req: ActivateRequest, db: Session = Depends(get_db)):
-    """Validate key (locally first, then Lemon Squeezy), save to DB."""
-    # Check local DB first
-    lic = db.query(License).filter(License.key == req.key).first()
+@limiter.limit("10/minute")
+def activate_license(request: Request, req: ActivateRequest, db: Session = Depends(get_db)):
+    """Validate key (locally first, then Lemon Squeezy), save to DB with device binding."""
+
+    key = req.key.strip().upper()
+
+    # 1. Key format validation — reject garbage immediately
+    if not KEY_PATTERN.match(key):
+        raise HTTPException(403, "Invalid license key format")
+
+    # 2. Check local DB first
+    lic = db.query(License).filter(License.key == key).first()
     if lic:
         if not lic.is_valid:
-            raise HTTPException(403, "License key is disabled")
+            raise HTTPException(403, "This license key has been disabled")
+
+        # Device binding check
+        if lic.device_id and req.device_id and lic.device_id != req.device_id:
+            raise HTTPException(403, "This key is already activated on another device. Each license allows 1 device only.")
+
+        # Bind device if not yet bound
+        if req.device_id and not lic.device_id:
+            lic.device_id = req.device_id
+            lic.activated_at = datetime.utcnow()
+            db.commit()
+
         return {"valid": True, "plan": lic.plan}
 
-    # CF-FREE keys: local only, no LS check
-    if req.key.startswith("CF-FREE"):
+    # 3. CF-FREE keys must exist in DB (generated via webhook) — no LS check
+    if key.startswith("CF-FREE"):
         raise HTTPException(403, "Invalid license key")
 
-    # Validate with Lemon Squeezy
-    result = _ls_validate(req.key)
+    # 4. Validate with Lemon Squeezy
+    result = _ls_validate(key)
     if not result["valid"]:
         raise HTTPException(403, "Invalid or expired license key")
 
-    # Save to local DB
+    # 5. Save to local DB with device binding
     new_lic = License(
-        key=req.key,
+        key=key,
         plan=result.get("plan", "pro"),
         instance_id=result.get("instance_id", ""),
+        device_id=req.device_id,
+        activated_at=datetime.utcnow(),
         is_valid=True,
     )
     db.add(new_lic)
@@ -109,11 +139,23 @@ def activate_license(req: ActivateRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/api/license/verify")
-def verify_license(req: VerifyRequest, db: Session = Depends(get_db)):
-    """Fast local check — used on every app load."""
-    lic = db.query(License).filter(License.key == req.key).first()
-    if not lic or not lic.is_valid:
+@limiter.limit("30/minute")
+def verify_license(request: Request, req: VerifyRequest, db: Session = Depends(get_db)):
+    """Fast local check — used on every app load. Also verifies device binding."""
+    key = req.key.strip().upper()
+
+    # Format check
+    if not KEY_PATTERN.match(key):
         raise HTTPException(403, "Invalid license")
+
+    lic = db.query(License).filter(License.key == key).first()
+    if not lic or not lic.is_valid:
+        raise HTTPException(403, "Invalid or disabled license")
+
+    # Device binding — if key is bound to a device, enforce it
+    if lic.device_id and req.device_id and lic.device_id != req.device_id:
+        raise HTTPException(403, "License is bound to another device")
+
     return {"valid": True, "plan": lic.plan}
 
 
@@ -227,6 +269,8 @@ def admin_list_licenses(
                 "plan": l.plan,
                 "is_valid": l.is_valid,
                 "jobs_used": l.jobs_used,
+                "device_bound": bool(l.device_id),
+                "activated_at": l.activated_at.isoformat() if l.activated_at else None,
                 "created_at": l.created_at.isoformat() if l.created_at else None,
             }
             for l in items
