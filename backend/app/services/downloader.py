@@ -65,6 +65,9 @@ def download_video(url: str, job_id: str) -> str:
     if cookies_file:
         base_opts["cookiefile"] = cookies_file
 
+    is_instagram = "instagram.com" in url
+    is_facebook = "facebook.com" in url or "fb.watch" in url
+
     if is_tiktok:
         base_opts["extractor_args"] = {
             "tiktok": {"api_hostname": "api22-normal-c-useast2a.tiktokv.com"}
@@ -120,10 +123,38 @@ def download_video(url: str, job_id: str) -> str:
             {**_no_cookies(base_opts), "check_formats": False},
         ]
     else:
+        # TikTok / Instagram / Facebook
+        social_opts = {**base_opts}
+
+        # Instagram cookies (set INSTAGRAM_COOKIES on Railway as base64)
+        ig_b64 = os.environ.get("INSTAGRAM_COOKIES", "")
+        if is_instagram and ig_b64:
+            try:
+                ig_data = base64.b64decode(ig_b64).decode("utf-8")
+                tmp2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+                tmp2.write(ig_data); tmp2.close()
+                social_opts["cookiefile"] = tmp2.name
+            except Exception:
+                pass
+
+        # Facebook cookies (set FACEBOOK_COOKIES on Railway as base64)
+        fb_b64 = os.environ.get("FACEBOOK_COOKIES", "")
+        if is_facebook and fb_b64:
+            try:
+                fb_data = base64.b64decode(fb_b64).decode("utf-8")
+                tmp3 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+                tmp3.write(fb_data); tmp3.close()
+                social_opts["cookiefile"] = tmp3.name
+            except Exception:
+                pass
+
         attempts = [
-            {**base_opts, "format": "bestvideo[height<=1080]+bestaudio/best"},
-            {**base_opts, "format": "best"},
-            {**base_opts},
+            {**social_opts, "format": "bestvideo[height<=1080]+bestaudio/best",
+             "merge_output_format": "mp4"},
+            {**social_opts, "format": "best[ext=mp4]/best",
+             "merge_output_format": "mp4"},
+            {**social_opts, "format": "best", "merge_output_format": "mp4"},
+            {**{k: v for k, v in base_opts.items() if k != "cookiefile"}},
         ]
 
     last_error = None
