@@ -24,8 +24,12 @@ export default function Home() {
 
   useEffect(() => {
     const saved = localStorage.getItem(LICENSE_KEY);
-    setAlreadyLicensed(!!saved);
-  }, []);
+    if (saved) {
+      setAlreadyLicensed(true);
+      // Auto-redirect to tool if already licensed
+      router.replace("/tool");
+    }
+  }, [router]);
 
   // Secret: 5 clicks on logo → admin
   const logoClicksRef = useRef<number[]>([]);

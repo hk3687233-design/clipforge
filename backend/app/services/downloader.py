@@ -34,17 +34,8 @@ def download_video(url: str, job_id: str) -> str:
 
     cookies_file = _get_cookies_file() if is_youtube else None
 
-    # Format: flexible — no strict ext requirements, fallback to best available
-    FORMAT = (
-        "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/"
-        "bestvideo[height<=1080]+bestaudio/"
-        "best[height<=1080]/"
-        "best"
-    )
-
-    ydl_opts = {
+    base_opts = {
         "outtmpl": out_path,
-        "format": FORMAT,
         "merge_output_format": "mp4",
         "quiet": True,
         "no_warnings": True,
@@ -62,44 +53,44 @@ def download_video(url: str, job_id: str) -> str:
     }
 
     if cookies_file:
-        ydl_opts["cookiefile"] = cookies_file
-
-    if is_youtube:
-        ydl_opts["extractor_args"] = {
-            "youtube": {
-                "player_client": ["ios", "android", "web"],
-            }
-        }
+        base_opts["cookiefile"] = cookies_file
 
     if is_tiktok:
-        ydl_opts["extractor_args"] = {
-            "tiktok": {
-                "api_hostname": "api22-normal-c-useast2a.tiktokv.com",
-            }
+        base_opts["extractor_args"] = {
+            "tiktok": {"api_hostname": "api22-normal-c-useast2a.tiktokv.com"}
         }
 
-    errors = []
-    # Try with current opts
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-    except Exception as e:
-        errors.append(str(e))
-        # Fallback: simplest possible format
-        if is_youtube:
-            fallback = dict(ydl_opts)
-            fallback["format"] = "best"
-            fallback["extractor_args"] = {
-                "youtube": {"player_client": ["mweb"]}
-            }
-            try:
-                with yt_dlp.YoutubeDL(fallback) as ydl:
-                    ydl.download([url])
-            except Exception as e2:
-                errors.append(str(e2))
-                raise Exception(errors[-1])
-        else:
-            raise
+    # YouTube: try multiple client + format combos in order
+    youtube_attempts = [
+        {**base_opts, "format": "bestvideo[height<=1080]+bestaudio/best",
+         "extractor_args": {"youtube": {"player_client": ["ios"]}}},
+        {**base_opts, "format": "bestvideo+bestaudio/best",
+         "extractor_args": {"youtube": {"player_client": ["android"]}}},
+        {**base_opts, "format": "best",
+         "extractor_args": {"youtube": {"player_client": ["mweb"]}}},
+        {**base_opts, "format": "worst"},   # last resort
+    ]
+
+    non_yt_attempts = [
+        {**base_opts, "format": "bestvideo[height<=1080]+bestaudio/best"},
+        {**base_opts, "format": "best"},
+    ]
+
+    attempts = youtube_attempts if is_youtube else non_yt_attempts
+
+    last_error = None
+    for attempt_opts in attempts:
+        try:
+            with yt_dlp.YoutubeDL(attempt_opts) as ydl:
+                ydl.download([url])
+            last_error = None
+            break   # success
+        except Exception as e:
+            last_error = e
+            continue
+
+    if last_error:
+        raise Exception(str(last_error))
 
     # Clean up temp cookies file
     if cookies_file and os.path.exists(cookies_file):
