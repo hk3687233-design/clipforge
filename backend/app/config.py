@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     lemon_squeezy_variant_free: str = ""    # Free plan variant ID
     # Email via Resend
     resend_api_key: str = ""
-    email_from: str = "ClipForge <noreply@clipforge.io>"
+    email_from: str = "ClipForge <noreply@getclipforge.online>"
     # Admin
     admin_secret: str = "change-me-in-prod"
 

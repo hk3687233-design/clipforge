@@ -20,7 +20,7 @@ FREE_CLIPS_LIMIT = 5
 def _get_license(x_license_key: Optional[str] = Header(None), db: Session = Depends(get_db)):
     """Validate license key from header. Raises 401/403 if invalid."""
     if not x_license_key:
-        raise HTTPException(401, "License key required. Get free access at getclipforge.vercel.app")
+        raise HTTPException(401, "License key required. Get free access at getclipforge.online")
     lic = db.query(License).filter(License.key == x_license_key).first()
     if not lic or not lic.is_valid:
         raise HTTPException(403, "Invalid or disabled license key")
