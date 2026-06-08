@@ -278,4 +278,4 @@ def send_license_email(to_email: str, license_key: str, plan: str = "pro") -> bo
             return resp.status in (200, 201)
     except Exception as e:
         print(f"Email send failed: {e}")
-        return False
+        raise RuntimeError(str(e))
