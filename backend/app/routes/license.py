@@ -313,9 +313,9 @@ def admin_test_email(
     """Test email sending — returns success/error details."""
     try:
         result = send_license_email(email, "CF-PRO-TEST11-TEST22-TEST33", "pro")
-        return {"sent": result, "to": email, "from": settings.email_from, "api_key_set": bool(settings.resend_api_key)}
+        return {"sent": result, "to": email, "from": settings.email_from, "key_prefix": settings.resend_api_key[:12] if settings.resend_api_key else "not set"}
     except Exception as e:
-        return {"sent": False, "error": str(e), "from": settings.email_from, "api_key_set": bool(settings.resend_api_key)}
+        return {"sent": False, "error": str(e), "from": settings.email_from, "key_prefix": settings.resend_api_key[:12] if settings.resend_api_key else "not set"}
 
 
 @router.post("/api/admin/licenses/generate")
