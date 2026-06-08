@@ -304,6 +304,20 @@ def admin_stats(db: Session = Depends(get_db), _: None = Depends(_check_admin)):
     }
 
 
+@router.post("/api/admin/test-email")
+def admin_test_email(
+    email: str,
+    db: Session = Depends(get_db),
+    _: None = Depends(_check_admin),
+):
+    """Test email sending — returns success/error details."""
+    try:
+        result = send_license_email(email, "CF-PRO-TEST11-TEST22-TEST33", "pro")
+        return {"sent": result, "to": email, "from": settings.email_from, "api_key_set": bool(settings.resend_api_key)}
+    except Exception as e:
+        return {"sent": False, "error": str(e), "from": settings.email_from, "api_key_set": bool(settings.resend_api_key)}
+
+
 @router.post("/api/admin/licenses/generate")
 def admin_generate_license(
     plan: str = "pro",
