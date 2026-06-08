@@ -332,6 +332,9 @@ def admin_test_email(
         with _ur.urlopen(_req, timeout=10) as _resp:
             _body = _resp.read().decode()
             return {"sent": True, "status": _resp.status, "body": _body, "key_prefix": settings.resend_api_key[:12]}
+    except _ur.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        return {"sent": False, "http_status": e.code, "error_body": body, "key_prefix": settings.resend_api_key[:12] if settings.resend_api_key else "none"}
     except Exception as e:
         return {"sent": False, "error": str(e), "key_prefix": settings.resend_api_key[:12] if settings.resend_api_key else "none"}
 
