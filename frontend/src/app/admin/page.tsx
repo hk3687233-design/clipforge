@@ -143,7 +143,7 @@ export default function AdminPanel() {
           <button onClick={login} className="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold py-3 rounded-xl transition-all">
             Enter Dashboard
           </button>
-          <p className="text-white/20 text-xs mt-4">Default: <code className="text-white/30">clipforge-admin-2024</code></p>
+          <p className="text-white/20 text-xs mt-4">Contact admin for access credentials.</p>
         </div>
       </div>
     );
