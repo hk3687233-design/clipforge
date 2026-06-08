@@ -1,43 +1,108 @@
 import yt_dlp
 import os
+import re
 import base64
 import tempfile
+import requests as _req
 from app.config import settings
 
 SUPPORTED_DOMAINS = ["tiktok.com", "youtube.com", "youtu.be", "instagram.com", "facebook.com", "fb.watch"]
 
+# Public Invidious instances — used as YouTube proxy to bypass datacenter IP blocks
+INVIDIOUS_INSTANCES = [
+    "https://invidious.privacyredirect.com",
+    "https://invidious.nerdvpn.de",
+    "https://inv.tux.pizza",
+    "https://invidious.perennialte.ch",
+    "https://yt.artemislena.eu",
+]
+
 def is_supported_url(url: str) -> bool:
     return any(domain in url for domain in SUPPORTED_DOMAINS)
 
-def _get_cookies_file() -> str | None:
-    """Write YOUTUBE_COOKIES env var (base64 cookies.txt) to a temp file."""
-    cookies_b64 = os.environ.get("YOUTUBE_COOKIES", "")
-    if not cookies_b64:
+def _extract_video_id(url: str) -> str | None:
+    """Extract YouTube video ID from URL."""
+    patterns = [
+        r"(?:v=|youtu\.be/|embed/|v/|shorts/)([a-zA-Z0-9_-]{11})",
+    ]
+    for p in patterns:
+        m = re.search(p, url)
+        if m:
+            return m.group(1)
+    return None
+
+def _get_cookies_file(b64: str) -> str | None:
+    if not b64:
         return None
     try:
-        cookies_data = base64.b64decode(cookies_b64).decode("utf-8")
+        data = base64.b64decode(b64).decode("utf-8")
         tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
-        tmp.write(cookies_data)
-        tmp.close()
+        tmp.write(data); tmp.close()
         return tmp.name
     except Exception:
         return None
 
+def _try_invidious(video_id: str, out_dir: str) -> str | None:
+    """Try downloading via Invidious public instances (bypasses Railway IP block)."""
+    for instance in INVIDIOUS_INSTANCES:
+        try:
+            print(f"[invidious] trying {instance}")
+            # Get video info from Invidious API
+            api_url = f"{instance}/api/v1/videos/{video_id}?fields=adaptiveFormats,formatStreams"
+            r = _req.get(api_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code != 200:
+                print(f"[invidious] {instance} API returned {r.status_code}")
+                continue
+
+            data = r.json()
+            # Pick best progressive format (no merge needed)
+            streams = data.get("formatStreams", [])
+            # Sort by quality: prefer 720p > 480p > 360p
+            quality_order = {"hd720": 0, "large": 1, "medium": 2, "small": 3}
+            streams.sort(key=lambda s: quality_order.get(s.get("quality", ""), 99))
+
+            for stream in streams:
+                stream_url = stream.get("url", "")
+                if not stream_url:
+                    continue
+                ext = stream.get("container", "mp4")
+                out_path = os.path.join(out_dir, f"source.{ext}")
+                print(f"[invidious] downloading {stream.get('quality')} from {instance}")
+
+                # Stream download with progress
+                dl = _req.get(stream_url, timeout=120, stream=True,
+                              headers={"User-Agent": "Mozilla/5.0"})
+                if dl.status_code != 200:
+                    continue
+                with open(out_path, "wb") as f:
+                    for chunk in dl.iter_content(chunk_size=1024 * 256):
+                        if chunk:
+                            f.write(chunk)
+                if os.path.exists(out_path) and os.path.getsize(out_path) > 10_000:
+                    print(f"[invidious] ✓ downloaded {os.path.getsize(out_path)//1024}KB")
+                    return out_path
+        except Exception as e:
+            print(f"[invidious] {instance} failed: {e}")
+            continue
+    return None
+
 def download_video(url: str, job_id: str) -> str:
-    """Download video from URL using yt-dlp. Returns local file path."""
+    """Download video from URL using yt-dlp + Invidious fallback."""
     out_dir = os.path.join(settings.temp_dir, job_id)
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "source.%(ext)s")
 
     is_youtube = "youtube.com" in url or "youtu.be" in url
     is_tiktok = "tiktok.com" in url
+    is_instagram = "instagram.com" in url
+    is_facebook = "facebook.com" in url or "fb.watch" in url
 
-    cookies_file = _get_cookies_file() if is_youtube else None
-
-    # Optional env vars for advanced YouTube bypass
-    proxy = os.environ.get("YOUTUBE_PROXY", "")           # e.g. socks5://user:pass@host:port
-    po_token = os.environ.get("YOUTUBE_PO_TOKEN", "")     # po_token for datacenter bypass
+    # Read proxy from env (YOUTUBE_PROXY=http://user:pass@host:port)
+    proxy = os.environ.get("YOUTUBE_PROXY", "")
+    po_token = os.environ.get("YOUTUBE_PO_TOKEN", "")
     visitor_data = os.environ.get("YOUTUBE_VISITOR_DATA", "")
+
+    cookies_file = _get_cookies_file(os.environ.get("YOUTUBE_COOKIES", "")) if is_youtube else None
 
     base_opts = {
         "outtmpl": out_path,
@@ -61,12 +126,8 @@ def download_video(url: str, job_id: str) -> str:
 
     if proxy:
         base_opts["proxy"] = proxy
-
     if cookies_file:
         base_opts["cookiefile"] = cookies_file
-
-    is_instagram = "instagram.com" in url
-    is_facebook = "facebook.com" in url or "fb.watch" in url
 
     if is_tiktok:
         base_opts["extractor_args"] = {
@@ -74,8 +135,8 @@ def download_video(url: str, job_id: str) -> str:
         }
 
     if is_youtube:
-        def _yt_args(client: list, skip_js: bool = False) -> dict:
-            args: dict = {"player_client": client}
+        def _yt_args(clients: list, skip_js: bool = False) -> dict:
+            args: dict = {"player_client": clients}
             if po_token and visitor_data:
                 args["po_token"] = [f"web+{po_token}"]
                 args["visitor_data"] = [visitor_data]
@@ -83,107 +144,98 @@ def download_video(url: str, job_id: str) -> str:
                 args["player_skip"] = ["js", "configs"]
             return {"youtube": args}
 
-        def _no_cookies(d: dict) -> dict:
+        def _nc(d: dict) -> dict:  # no cookies
             return {k: v for k, v in d.items() if k != "cookiefile"}
 
-        # Progressive MP4: format 18 = 360p, 22 = 720p. No merge needed.
         PROG = "18/22/17/36/best[ext=mp4]/best"
-        DASH = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best"
-        ANY  = "bestvideo*+bestaudio*/best*"
+        DASH = "bestvideo[height<=720]+bestaudio/best"
 
-        attempts = [
-            # 1. ios + progressive + cookies — best chance on datacenter
-            {**base_opts, "format": PROG,
+        yt_attempts = [
+            {**base_opts, "format": PROG, "extractor_args": _yt_args(["ios"])},
+            {**base_opts, "format": PROG, "extractor_args": _yt_args(["tv_embedded"])},
+            {**base_opts, "format": PROG, "extractor_args": _yt_args(["android_testsuite"])},
+            {**base_opts, "format": PROG, "extractor_args": _yt_args(["android_vr"])},
+            {**_nc(base_opts), "format": PROG, "extractor_args": _yt_args(["ios"])},
+            {**_nc(base_opts), "format": PROG, "extractor_args": _yt_args(["tv_embedded"])},
+            {**_nc(base_opts), "format": DASH, "check_formats": False,
              "extractor_args": _yt_args(["ios"])},
-            # 2. tv_embedded + progressive + cookies
-            {**base_opts, "format": PROG,
-             "extractor_args": _yt_args(["tv_embedded"])},
-            # 3. android_testsuite (newer, often bypasses blocks)
-            {**base_opts, "format": PROG,
-             "extractor_args": _yt_args(["android_testsuite"])},
-            # 4. ios + no format restriction + check_formats=False
-            {**base_opts, "format": DASH, "check_formats": False,
-             "extractor_args": _yt_args(["ios"])},
-            # 5. ios without cookies (cookies can sometimes hurt)
-            {**_no_cookies(base_opts), "format": PROG,
-             "extractor_args": _yt_args(["ios"])},
-            # 6. tv_embedded without cookies
-            {**_no_cookies(base_opts), "format": PROG,
-             "extractor_args": _yt_args(["tv_embedded"])},
-            # 7. android without cookies
-            {**_no_cookies(base_opts), "format": PROG,
-             "extractor_args": _yt_args(["android"])},
-            # 8. android_vr + check_formats=False
-            {**base_opts, "format": ANY, "check_formats": False,
-             "extractor_args": _yt_args(["android_vr"])},
-            # 9. web_embedded, skip JS player (InnerTube API only)
-            {**base_opts, "format": DASH, "check_formats": False,
-             "extractor_args": _yt_args(["web_embedded"], skip_js=True)},
-            # 10. No format, no cookies, no extractor args — pure fallback
-            {**_no_cookies(base_opts), "check_formats": False},
+            {**_nc(base_opts), "check_formats": False,
+             "extractor_args": _yt_args(["ios", "tv_embedded"])},
         ]
+
+        # Try yt-dlp first
+        last_error = None
+        for i, opts in enumerate(yt_attempts):
+            client = opts.get("extractor_args", {}).get("youtube", {}).get("player_client", ["?"])[0]
+            fmt = opts.get("format", "default")[:20]
+            has_c = "cookiefile" in opts
+            print(f"[yt-dlp] attempt {i+1}/{len(yt_attempts)}: client={client} fmt={fmt} cookies={has_c}")
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    ydl.download([url])
+                last_error = None
+                print(f"[yt-dlp] ✓ success on attempt {i+1}")
+                break
+            except Exception as e:
+                err_str = str(e)[:150]
+                print(f"[yt-dlp] ✗ attempt {i+1}: {err_str}")
+                last_error = e
+                continue
+
+        # ── Invidious fallback (bypasses Railway IP block completely) ─────
+        if last_error:
+            video_id = _extract_video_id(url)
+            if video_id:
+                print(f"[invidious] yt-dlp failed, trying Invidious for video {video_id}")
+                inv_path = _try_invidious(video_id, out_dir)
+                if inv_path:
+                    if cookies_file and os.path.exists(cookies_file):
+                        os.unlink(cookies_file)
+                    return inv_path
+            raise Exception(str(last_error))
+
     else:
         # TikTok / Instagram / Facebook
         social_opts = {**base_opts}
 
-        # Instagram cookies (set INSTAGRAM_COOKIES on Railway as base64)
-        ig_b64 = os.environ.get("INSTAGRAM_COOKIES", "")
-        if is_instagram and ig_b64:
-            try:
-                ig_data = base64.b64decode(ig_b64).decode("utf-8")
-                tmp2 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
-                tmp2.write(ig_data); tmp2.close()
-                social_opts["cookiefile"] = tmp2.name
-            except Exception:
-                pass
+        ig_cookies = _get_cookies_file(os.environ.get("INSTAGRAM_COOKIES", ""))
+        if is_instagram and ig_cookies:
+            social_opts["cookiefile"] = ig_cookies
 
-        # Facebook cookies (set FACEBOOK_COOKIES on Railway as base64)
-        fb_b64 = os.environ.get("FACEBOOK_COOKIES", "")
-        if is_facebook and fb_b64:
-            try:
-                fb_data = base64.b64decode(fb_b64).decode("utf-8")
-                tmp3 = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
-                tmp3.write(fb_data); tmp3.close()
-                social_opts["cookiefile"] = tmp3.name
-            except Exception:
-                pass
+        fb_cookies = _get_cookies_file(os.environ.get("FACEBOOK_COOKIES", ""))
+        if is_facebook and fb_cookies:
+            social_opts["cookiefile"] = fb_cookies
 
-        attempts = [
+        social_attempts = [
             {**social_opts, "format": "bestvideo[height<=1080]+bestaudio/best",
              "merge_output_format": "mp4"},
             {**social_opts, "format": "best[ext=mp4]/best",
              "merge_output_format": "mp4"},
-            {**social_opts, "format": "best", "merge_output_format": "mp4"},
+            {**social_opts, "format": "best"},
             {**{k: v for k, v in base_opts.items() if k != "cookiefile"}},
         ]
 
-    last_error = None
-    for i, attempt_opts in enumerate(attempts):
-        try:
-            client = (attempt_opts.get("extractor_args", {})
-                      .get("youtube", {}).get("player_client", ["default"])[0])
-            fmt = attempt_opts.get("format", "none")
-            has_cookies = "cookiefile" in attempt_opts
-            cf = attempt_opts.get("check_formats", True)
-            print(f"[yt-dlp] attempt {i+1}/{len(attempts)}: "
-                  f"client={client} fmt={fmt[:20]} cookies={has_cookies} check_fmt={cf}")
-            with yt_dlp.YoutubeDL(attempt_opts) as ydl:
-                ydl.download([url])
-            last_error = None
-            print(f"[yt-dlp] ✓ success on attempt {i+1}")
-            break
-        except Exception as e:
-            err_str = str(e)
-            print(f"[yt-dlp] ✗ attempt {i+1} failed: {err_str[:200]}")
-            last_error = e
-            continue
+        last_error = None
+        for i, opts in enumerate(social_attempts):
+            platform = "tiktok" if is_tiktok else "instagram" if is_instagram else "facebook"
+            print(f"[{platform}] attempt {i+1}/{len(social_attempts)}")
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    ydl.download([url])
+                last_error = None
+                print(f"[{platform}] ✓ success on attempt {i+1}")
+                break
+            except Exception as e:
+                print(f"[{platform}] ✗ attempt {i+1}: {str(e)[:150]}")
+                last_error = e
+                continue
 
-    # Clean up temp cookies file
+        if last_error:
+            raise Exception(str(last_error))
+
+    # Clean up temp cookies
     if cookies_file and os.path.exists(cookies_file):
         os.unlink(cookies_file)
-
-    if last_error:
-        raise Exception(str(last_error))
 
     # Find the downloaded file
     for f in os.listdir(out_dir):
