@@ -311,11 +311,29 @@ def admin_test_email(
     _: None = Depends(_check_admin),
 ):
     """Test email sending — returns success/error details."""
+    import urllib.request as _ur
+    import json as _json
     try:
-        result = send_license_email(email, "CF-PRO-TEST11-TEST22-TEST33", "pro")
-        return {"sent": result, "to": email, "from": settings.email_from, "key_prefix": settings.resend_api_key[:12] if settings.resend_api_key else "not set"}
+        _payload = _json.dumps({
+            "from": settings.email_from,
+            "to": [email],
+            "subject": "ClipForge Test",
+            "html": "<h1>Test</h1><p>Direct urllib test from Railway.</p>"
+        }).encode("utf-8")
+        _req = _ur.Request(
+            "https://api.resend.com/emails",
+            data=_payload,
+            headers={
+                "Authorization": f"Bearer {settings.resend_api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with _ur.urlopen(_req, timeout=10) as _resp:
+            _body = _resp.read().decode()
+            return {"sent": True, "status": _resp.status, "body": _body, "key_prefix": settings.resend_api_key[:12]}
     except Exception as e:
-        return {"sent": False, "error": str(e), "from": settings.email_from, "key_prefix": settings.resend_api_key[:12] if settings.resend_api_key else "not set"}
+        return {"sent": False, "error": str(e), "key_prefix": settings.resend_api_key[:12] if settings.resend_api_key else "none"}
 
 
 @router.post("/api/admin/licenses/generate")
