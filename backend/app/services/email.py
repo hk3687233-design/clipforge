@@ -2,9 +2,8 @@
 Email delivery via Resend (free 3000/month).
 Falls back to console log if RESEND_API_KEY not set (local dev).
 """
-import urllib.request
-import urllib.parse
 import json
+import requests
 from app.config import settings
 
 
@@ -258,24 +257,23 @@ def send_license_email(to_email: str, license_key: str, plan: str = "pro") -> bo
         return True
 
     try:
-        payload = json.dumps({
-            "from": settings.email_from,
-            "to": [to_email],
-            "subject": subject,
-            "html": html,
-        }).encode("utf-8")
-
-        req = urllib.request.Request(
+        resp = requests.post(
             "https://api.resend.com/emails",
-            data=payload,
             headers={
                 "Authorization": f"Bearer {settings.resend_api_key}",
                 "Content-Type": "application/json",
             },
-            method="POST",
+            json={
+                "from": settings.email_from,
+                "to": [to_email],
+                "subject": subject,
+                "html": html,
+            },
+            timeout=15,
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return resp.status in (200, 201)
+        if resp.status_code not in (200, 201):
+            raise RuntimeError(f"Resend {resp.status_code}: {resp.text}")
+        return True
     except Exception as e:
         print(f"Email send failed: {e}")
         raise RuntimeError(str(e))
