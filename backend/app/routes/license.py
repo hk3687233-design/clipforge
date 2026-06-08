@@ -48,7 +48,10 @@ def _generate_key(plan: str = "pro") -> str:
 def _ls_validate(key: str) -> dict:
     """Call Lemon Squeezy API to validate a license key."""
     if not settings.lemon_squeezy_api_key:
-        return {"valid": True, "plan": "pro"}  # dev bypass
+        # No LS API key set — only keys already saved to DB (via webhook) are valid.
+        # DB lookup happens before this function is called, so reaching here means
+        # the key is NOT in our DB → reject it.
+        return {"valid": False, "plan": "pro"}
     try:
         payload = urllib.parse.urlencode({"license_key": key}).encode()
         req = urllib.request.Request(
@@ -149,8 +152,8 @@ async def lemon_webhook(request: Request, db: Session = Depends(get_db)):
         sig = request.headers.get("X-Signature", "")
         expected = hmac.new(
             settings.lemon_squeezy_webhook_secret.encode(),
-            body,
-            hashlib.sha256,
+            msg=body,
+            digestmod=hashlib.sha256,
         ).hexdigest()
         if not hmac.compare_digest(sig, expected):
             raise HTTPException(400, "Invalid webhook signature")
