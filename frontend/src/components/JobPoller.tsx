@@ -9,7 +9,7 @@ const FREE_CLIP_LIMIT = 5;
 const STATUS_CONFIG: Record<string, { label: string; detail: string; color: string; step: number }> = {
   pending:     { label: "Queued",                 detail: "Waiting to start...",                          color: "text-yellow-400", step: 0 },
   downloading: { label: "Downloading",            detail: "Fetching video from URL...",                   color: "text-blue-400",   step: 1 },
-  analyzing:   { label: "AI Analyzing",           detail: "Whisper AI is transcribing the audio...",      color: "text-brand-400",  step: 2 },
+  analyzing:   { label: "AI Analyzing",           detail: "Detecting products & segments...",             color: "text-brand-400",  step: 2 },
   extracting:  { label: "Extracting Clips",       detail: "Cutting and encoding videos...",               color: "text-purple-400", step: 3 },
   done:        { label: "Complete!",              detail: "Your clips are ready to download.",             color: "text-green-400",  step: 4 },
   failed:      { label: "Failed",                 detail: "Something went wrong.",                        color: "text-red-400",    step: -1 },
@@ -73,7 +73,7 @@ export default function JobPoller({ jobId, onReset, plan = "pro" }: { jobId: str
             )}
             {job?.status === "analyzing" && (
               <div className="flex items-center gap-1.5 text-brand-400 text-xs bg-brand-500/10 px-2 py-1 rounded-full border border-brand-500/20 mt-1">
-                <Sparkles size={11} /> ~2-3 min
+                <Sparkles size={11} /> ~15 sec
               </div>
             )}
           </div>
