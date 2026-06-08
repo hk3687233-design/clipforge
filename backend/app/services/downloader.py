@@ -34,14 +34,23 @@ def download_video(url: str, job_id: str) -> str:
 
     cookies_file = _get_cookies_file() if is_youtube else None
 
+    # Format: flexible — no strict ext requirements, fallback to best available
+    FORMAT = (
+        "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/"
+        "bestvideo[height<=1080]+bestaudio/"
+        "best[height<=1080]/"
+        "best"
+    )
+
     ydl_opts = {
         "outtmpl": out_path,
-        "format": "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "format": FORMAT,
         "merge_output_format": "mp4",
         "quiet": True,
         "no_warnings": True,
         "socket_timeout": 30,
-        "retries": 3,
+        "retries": 5,
+        "fragment_retries": 5,
         "http_headers": {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -58,8 +67,7 @@ def download_video(url: str, job_id: str) -> str:
     if is_youtube:
         ydl_opts["extractor_args"] = {
             "youtube": {
-                "player_client": ["android", "tv_embedded"],
-                "player_skip": ["webpage"],
+                "player_client": ["ios", "android", "web"],
             }
         }
 
@@ -77,11 +85,12 @@ def download_video(url: str, job_id: str) -> str:
             ydl.download([url])
     except Exception as e:
         errors.append(str(e))
-        # YouTube fallback with ios client
+        # Fallback: simplest possible format
         if is_youtube:
             fallback = dict(ydl_opts)
+            fallback["format"] = "best"
             fallback["extractor_args"] = {
-                "youtube": {"player_client": ["ios", "mweb"]}
+                "youtube": {"player_client": ["mweb"]}
             }
             try:
                 with yt_dlp.YoutubeDL(fallback) as ydl:
