@@ -2,7 +2,7 @@
 Smart product segment detector — 3-tier strategy:
   1. YouTube chapters  → instant, 100% accurate (best)
   2. Description parse → timestamps + affiliate links from text
-  3. Equal-time split  → fast fallback, no Whisper/torch needed (saves RAM)
+  3. faster-whisper    → AI transcription, 4x faster & 4x less RAM than openai-whisper
 """
 import subprocess
 import os
@@ -11,6 +11,9 @@ import re
 import yt_dlp
 from typing import List, Dict, Tuple, Optional
 from app.config import settings
+
+# Max audio seconds to transcribe (prevents OOM on Railway for very long videos)
+WHISPER_MAX_SECONDS = 600  # 10 minutes
 
 
 def _p(path: str) -> str:
@@ -82,7 +85,6 @@ def _chapters_to_products(chapters: List[Dict], description: str, duration: floa
 # ── Tier 2: Description timestamp parse ───────────────────────────────────
 
 def _parse_description_timestamps(description: str, duration: float) -> List[Dict]:
-    products = []
     entries = []
 
     for line in description.splitlines():
@@ -98,6 +100,7 @@ def _parse_description_timestamps(description: str, duration: float) -> List[Dic
             entries.append({"name": name, "start": float(start), "link": link})
 
     skip = {"intro", "outro", "introduction", "end", "opening"}
+    products = []
 
     for i, entry in enumerate(entries):
         if entry["name"].lower() in skip:
@@ -114,97 +117,168 @@ def _parse_description_timestamps(description: str, duration: float) -> List[Dic
     return products
 
 
-# ── Tier 3: Equal-time segments (no Whisper/torch — saves RAM) ────────────
+# ── Tier 3: faster-whisper transcription ─────────────────────────────────
 
-def _equal_time_segments(video_path: str, duration: float) -> List[Dict]:
+def _extract_audio(video_path: str, out_dir: str, max_seconds: int = None) -> str:
+    """Extract mono 16kHz WAV audio for Whisper. Optionally truncate."""
+    audio_path = os.path.join(out_dir, "audio.wav")
+    cmd = [
+        "ffmpeg", "-y", "-i", _p(video_path),
+        "-vn", "-acodec", "pcm_s16le",
+        "-ar", "16000", "-ac", "1",
+    ]
+    if max_seconds:
+        cmd += ["-t", str(max_seconds)]
+    cmd.append(_p(audio_path))
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    if result.returncode != 0:
+        raise Exception(f"ffmpeg audio extract failed: {result.stderr[:300]}")
+    return audio_path
+
+
+def _transcribe_whisper(video_path: str, job_id: str, duration: float) -> List[Dict]:
     """
-    Split video into equal segments of ~60s each.
-    Fast, zero memory overhead, works for any platform.
-    Target: 6-12 clips max regardless of video length.
+    Transcribe audio with faster-whisper (CTranslate2 backend).
+    4x faster & 4x less RAM than openai-whisper on CPU.
     """
-    # Detect silence points using ffmpeg (lightweight, no ML)
-    silence_pts = []
-    try:
-        res = subprocess.run([
-            "ffmpeg", "-i", _p(video_path),
-            "-af", "silencedetect=noise=-35dB:d=0.8",
-            "-f", "null", "-"
-        ], capture_output=True, text=True, timeout=60)
-        for line in res.stderr.splitlines():
-            m = re.search(r"silence_end:\s*([\d.]+)", line)
-            if m:
-                silence_pts.append(float(m.group(1)))
-    except Exception:
-        pass
+    from faster_whisper import WhisperModel
 
-    # Target segment length based on video duration
-    if duration <= 120:
-        target_len = 30.0
-    elif duration <= 300:
-        target_len = 45.0
-    elif duration <= 600:
-        target_len = 60.0
-    else:
-        target_len = 90.0
+    out_dir = os.path.dirname(video_path)
 
-    max_clips = 12
+    # Cap audio to first WHISPER_MAX_SECONDS to prevent OOM on long videos
+    cap = WHISPER_MAX_SECONDS if duration > WHISPER_MAX_SECONDS else None
+    effective_duration = min(duration, WHISPER_MAX_SECONDS)
+    print(f"[whisper] extracting audio (cap={cap}s)")
+    audio_path = _extract_audio(video_path, out_dir, max_seconds=cap)
 
-    # Build cut points: prefer silence points near target boundaries
-    cuts = [0.0]
-    last_cut = 0.0
+    # tiny INT8 model — ~150MB RAM, fast on CPU
+    model_size = getattr(settings, "whisper_model", "tiny")
+    print(f"[whisper] loading faster-whisper model={model_size}")
+    model = WhisperModel(model_size, device="cpu", compute_type="int8")
 
-    while last_cut + target_len * 0.6 < duration:
-        ideal = last_cut + target_len
-        if ideal >= duration:
-            break
+    print("[whisper] transcribing...")
+    segments_iter, info = model.transcribe(
+        audio_path,
+        language="en",
+        beam_size=1,
+        vad_filter=True,
+        vad_parameters={"min_silence_duration_ms": 500},
+    )
+    segments = list(segments_iter)
+    print(f"[whisper] got {len(segments)} raw segments")
 
-        # Find nearest silence point within ±15s of ideal
-        best = ideal
-        for pt in silence_pts:
-            if abs(pt - ideal) < abs(best - ideal) and abs(pt - ideal) <= 15:
-                best = pt
+    # Clean up audio file immediately to free disk space
+    if os.path.exists(audio_path):
+        os.remove(audio_path)
 
-        if best <= last_cut + 5:
-            best = ideal
+    if not segments:
+        return []
 
-        cuts.append(round(best, 2))
-        last_cut = best
+    # Product keyword patterns
+    PRODUCT_PATTERNS = [
+        r"\b(this is|introducing|here'?s?|let me show you|check out|we have|i have|presenting)\b.{3,60}",
+        r"\b(product|item|device|gadget|tool|phone|laptop|camera|headphone|speaker|watch|keyboard|mouse|charger|cable|bag|case)\b",
+        r"\b(brand|model|version|series|edition|pro|plus|max|ultra|mini)\b",
+        r"\b(price|cost|buy|purchase|available|amazon|link|affiliate)\b",
+        r"\b([A-Z][a-z]+ [A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\b",  # CapWords product names
+    ]
+    PRODUCT_RE = re.compile("|".join(PRODUCT_PATTERNS), re.IGNORECASE)
 
-        if len(cuts) >= max_clips:
-            break
+    TRANSITION_PATTERNS = [
+        r"\b(next up|next product|moving on|now let'?s?|number \d|#\d|\bno\.?\s*\d)\b",
+        r"\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b",
+        r"\b(alright|okay|so|now|moving|next|another)\b.{0,30}\b(product|item|look|check)\b",
+    ]
+    TRANSITION_RE = re.compile("|".join(TRANSITION_PATTERNS), re.IGNORECASE)
 
-    cuts.append(round(duration, 2))
+    # Group consecutive segments into product blocks
+    # A new product block starts when a transition phrase is detected
+    blocks: List[Dict] = []
+    current_block: Optional[Dict] = None
 
-    # Build products
-    products = []
-    for i in range(len(cuts) - 1):
-        start, end = cuts[i], cuts[i + 1]
-        if end - start < 5:
+    for seg in segments:
+        text = seg.text.strip()
+        if not text:
             continue
 
-        # Name based on position
-        pct = start / duration
-        if pct < 0.1:
-            name = "Intro / Overview"
-        elif pct > 0.85:
-            name = "Final Thoughts"
+        is_transition = bool(TRANSITION_RE.search(text))
+        is_product_mention = bool(PRODUCT_RE.search(text))
+
+        if is_transition or (is_product_mention and current_block is None):
+            # Save previous block
+            if current_block:
+                blocks.append(current_block)
+            current_block = {
+                "texts": [text],
+                "start": seg.start,
+                "end": seg.end,
+            }
+        elif current_block:
+            current_block["texts"].append(text)
+            current_block["end"] = seg.end
         else:
-            m = int(start // 60)
-            s = int(start % 60)
-            name = f"Segment {i + 1}  ({m}:{s:02d})"
+            # No block started yet, start one from first segment
+            current_block = {
+                "texts": [text],
+                "start": seg.start,
+                "end": seg.end,
+            }
+
+    if current_block:
+        blocks.append(current_block)
+
+    if not blocks:
+        return []
+
+    # Convert blocks to products
+    products = []
+    for i, block in enumerate(blocks):
+        full_text = " ".join(block["texts"])
+
+        # Extract product name: try to find the most prominent noun phrase
+        name = _extract_product_name(full_text, i + 1)
+
+        # Extract affiliate URL if mentioned in text
+        link_m = re.search(r"https?://\S+", full_text)
+        aff_url = link_m.group(0) if link_m else ""
+
+        start = round(block["start"], 2)
+        end = round(block["end"], 2)
+
+        # Skip very short segments (< 3s)
+        if end - start < 3:
+            continue
 
         products.append({
             "name": name,
-            "description": "",
+            "description": full_text[:200],
             "start": start,
             "end": end,
-            "affiliate_url": "",
+            "affiliate_url": aff_url,
         })
 
-    return products if products else [
-        {"name": "Full Video", "description": "",
-         "start": 0.0, "end": round(duration, 2), "affiliate_url": ""}
+    return products
+
+
+def _extract_product_name(text: str, fallback_num: int) -> str:
+    """Attempt to extract a product name from transcript text."""
+    # Try: "the X [Pro/Max/Plus]" or "this is the X"
+    patterns = [
+        r"(?:this is|here'?s?|introducing|check out|it'?s? (?:the|a|an))\s+(?:the\s+)?([A-Z][^,.!?]{3,40})",
+        r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z0-9]+){1,3})\b",  # CapWords brand/model names
+        r"\b([A-Z][A-Z0-9]+(?:\s+[A-Z0-9]+)?)\b",  # ALL CAPS model codes (e.g. RTX 4090)
     ]
+    for p in patterns:
+        m = re.search(p, text)
+        if m:
+            name = m.group(1).strip()
+            if 3 < len(name) < 60:
+                return name
+
+    # Fallback: first 6 words of text
+    words = text.split()[:6]
+    name = " ".join(words).rstrip(".,!?")
+    return name if name else f"Product {fallback_num}"
 
 
 # ── Public API ─────────────────────────────────────────────────────────────
@@ -214,7 +288,7 @@ def analyze_video(video_path: str, job_id: str, source_url: str = None) -> Tuple
     Smart 3-tier analysis. Returns (products, duration).
     Tier 1: YouTube chapters (instant)
     Tier 2: Description timestamps (instant)
-    Tier 3: Equal-time segments with silence detection (fast, no ML/RAM)
+    Tier 3: faster-whisper AI transcription (fast + low RAM fallback)
     """
     duration = _get_duration(video_path)
     print(f"[analyzer] video duration={duration:.1f}s source={source_url or 'upload'}")
@@ -240,8 +314,22 @@ def analyze_video(video_path: str, job_id: str, source_url: str = None) -> Tuple
                     print(f"[analyzer] Tier 2 ✓ found {len(products)} timestamp segments")
                     return products, duration
 
-    # ── Tier 3: Equal-time split (fast, no Whisper) ────────────────────
-    print("[analyzer] Tier 3: equal-time segments with silence detection")
-    products = _equal_time_segments(video_path, duration)
-    print(f"[analyzer] Tier 3 ✓ created {len(products)} segments")
-    return products, duration
+    # ── Tier 3: faster-whisper AI transcription ────────────────────────
+    print("[analyzer] Tier 3: faster-whisper transcription")
+    try:
+        products = _transcribe_whisper(video_path, job_id, duration)
+        if products:
+            print(f"[analyzer] Tier 3 ✓ found {len(products)} products via Whisper")
+            return products, duration
+        print("[analyzer] Tier 3: no products detected in transcript")
+    except Exception as e:
+        print(f"[analyzer] Tier 3 failed: {e}")
+
+    # Final fallback: return the whole video as one segment
+    return [{
+        "name": "Full Video",
+        "description": "No specific products detected. Download the full clip.",
+        "start": 0.0,
+        "end": round(duration, 2),
+        "affiliate_url": "",
+    }], duration

@@ -10,3 +10,5 @@ pydantic-settings==2.6.0
 psycopg2-binary
 aiofiles==24.1.0
 boto3
+# faster-whisper uses CTranslate2 — 4x less RAM + 4x faster than openai-whisper+torch
+faster-whisper==1.0.3
