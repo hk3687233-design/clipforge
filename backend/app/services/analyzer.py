@@ -296,16 +296,18 @@ def _parse_description_timestamps(description: str, duration: float) -> List[Dic
     if len(entries) < 2:
         return []
 
-    # Get all description links for fuzzy matching
-    aff = _extract_all_links(description)
+    # Drop the last entry — its end time = video end (no next chapter),
+    # making a huge clip. Second-to-last is the real last product.
+    entries = entries[:-1]
+
+    aff  = _extract_all_links(description)
     skip = {"intro", "outro", "introduction", "end", "opening", "sponsor"}
     products = []
 
     for i, entry in enumerate(entries):
         if entry["name"].lower().strip() in skip:
             continue
-        end = entries[i + 1]["start"] if i + 1 < len(entries) else duration
-        # prefer inline link, fallback to description link match
+        end  = entries[i + 1]["start"] if i + 1 < len(entries) else duration
         link = entry["link"] or _match_link(entry["name"], aff)
         products.append({
             "name": entry["name"], "description": "",

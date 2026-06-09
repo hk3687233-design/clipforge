@@ -66,7 +66,7 @@ def extract_clip(video_path: str, job_id: str, product: Dict, index: int) -> str
         "-c:v", "libx264",
         "-crf", "18",
         "-preset", "veryfast",
-        "-vf", "scale='min(1920,iw)':'min(1080,ih)':force_original_aspect_ratio=decrease",
+        "-vf", "scale='min(2560,iw)':'min(1440,ih)':force_original_aspect_ratio=decrease",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", "192k",
