@@ -42,23 +42,59 @@ def _get_duration(video_path: str) -> float:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _get_yt_metadata(url: str) -> Optional[Dict]:
-    """Fetch chapters + description via yt-dlp (no download)."""
+    """
+    Fetch chapters + description via yt-dlp (no download).
+    Uses same cookies as downloader so Railway IP block is bypassed.
+    """
+    import base64, tempfile
     clean = _normalize_yt_url(url)
     print(f"[analyzer] fetching metadata for {clean}")
-    for attempt, opts in enumerate([
-        {"quiet": True,  "no_warnings": True,  "skip_download": True},
-        {"quiet": False, "no_warnings": False, "skip_download": True,
-         "extractor_args": {"youtube": {"player_client": ["ios"]}}},
-    ], 1):
+
+    # Build cookies file from env (same as downloader)
+    cookies_file = None
+    b64 = os.environ.get("YOUTUBE_COOKIES", "")
+    if b64:
         try:
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(clean, download=False)
-                ch = info.get("chapters") or []
-                desc = info.get("description") or ""
-                print(f"[analyzer] metadata ok (attempt {attempt}): chapters={len(ch)} desc_len={len(desc)}")
-                return info
+            data = base64.b64decode(b64).decode("utf-8")
+            tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+            tmp.write(data); tmp.close()
+            cookies_file = tmp.name
         except Exception as e:
-            print(f"[analyzer] metadata attempt {attempt} failed: {e}")
+            print(f"[analyzer] cookies parse error: {e}")
+
+    base_opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "socket_timeout": 30,
+    }
+    if cookies_file:
+        base_opts["cookiefile"] = cookies_file
+
+    attempts = [
+        {**base_opts,
+         "extractor_args": {"youtube": {"player_client": ["ios"]}}},
+        {**base_opts,
+         "extractor_args": {"youtube": {"player_client": ["tv_embedded"]}}},
+        {**{k: v for k, v in base_opts.items() if k != "cookiefile"},
+         "extractor_args": {"youtube": {"player_client": ["ios"]}}},
+    ]
+
+    try:
+        for i, opts in enumerate(attempts, 1):
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(clean, download=False)
+                    ch   = info.get("chapters") or []
+                    desc = info.get("description") or ""
+                    print(f"[analyzer] metadata ok (attempt {i}): chapters={len(ch)} desc_len={len(desc)}")
+                    return info
+            except Exception as e:
+                print(f"[analyzer] metadata attempt {i} failed: {str(e)[:120]}")
+    finally:
+        if cookies_file and os.path.exists(cookies_file):
+            os.unlink(cookies_file)
+
     return None
 
 
