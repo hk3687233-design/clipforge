@@ -41,16 +41,33 @@ def _get_duration(video_path: str) -> float:
 # Tier 1 helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+INVIDIOUS_INSTANCES = [
+    "https://inv.nadeko.net",
+    "https://invidious.fdn.fr",
+    "https://invidious.projectsegfau.lt",
+    "https://iv.ggtyler.dev",
+    "https://invidious.lunar.icu",
+    "https://invidious.privacyredirect.com",
+    "https://yt.artemislena.eu",
+    "https://invidious.nerdvpn.de",
+]
+
+import requests as _req
+
 def _get_yt_metadata(url: str) -> Optional[Dict]:
     """
-    Fetch chapters + description via yt-dlp (no download).
-    Uses same cookies as downloader so Railway IP block is bypassed.
+    Fetch chapters + description.
+    Strategy:
+      1. yt-dlp (works locally, may be blocked on Railway)
+      2. Invidious API — bypasses Railway IP block completely
     """
     import base64, tempfile
     clean = _normalize_yt_url(url)
-    print(f"[analyzer] fetching metadata for {clean}")
+    vid_id = re.search(r"v=([a-zA-Z0-9_-]{11})", clean)
+    vid_id = vid_id.group(1) if vid_id else None
+    print(f"[analyzer] fetching metadata  id={vid_id}")
 
-    # Build cookies file from env (same as downloader)
+    # ── Attempt 1: yt-dlp with cookies ───────────────────────────────
     cookies_file = None
     b64 = os.environ.get("YOUTUBE_COOKIES", "")
     if b64:
@@ -59,42 +76,91 @@ def _get_yt_metadata(url: str) -> Optional[Dict]:
             tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
             tmp.write(data); tmp.close()
             cookies_file = tmp.name
+        except Exception:
+            pass
+
+    for client in (["ios"], ["tv_embedded"]):
+        opts = {
+            "quiet": True, "no_warnings": True, "skip_download": True,
+            "socket_timeout": 20,
+            "extractor_args": {"youtube": {"player_client": client}},
+        }
+        if cookies_file:
+            opts["cookiefile"] = cookies_file
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(clean, download=False)
+            ch   = info.get("chapters") or []
+            desc = info.get("description") or ""
+            print(f"[analyzer] yt-dlp metadata ok: chapters={len(ch)} desc={len(desc)}")
+            if cookies_file:
+                try: os.unlink(cookies_file)
+                except: pass
+            return info
         except Exception as e:
-            print(f"[analyzer] cookies parse error: {e}")
+            print(f"[analyzer] yt-dlp metadata failed ({client}): {str(e)[:100]}")
 
-    base_opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "socket_timeout": 30,
-    }
     if cookies_file:
-        base_opts["cookiefile"] = cookies_file
+        try: os.unlink(cookies_file)
+        except: pass
 
-    attempts = [
-        {**base_opts,
-         "extractor_args": {"youtube": {"player_client": ["ios"]}}},
-        {**base_opts,
-         "extractor_args": {"youtube": {"player_client": ["tv_embedded"]}}},
-        {**{k: v for k, v in base_opts.items() if k != "cookiefile"},
-         "extractor_args": {"youtube": {"player_client": ["ios"]}}},
-    ]
+    # ── Attempt 2: Invidious API (bypasses Railway block) ────────────
+    if not vid_id:
+        print("[analyzer] no video ID — cannot use Invidious")
+        return None
 
+    HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+    # Also try fresh instances from api.invidious.io
+    extra: List[str] = []
     try:
-        for i, opts in enumerate(attempts, 1):
-            try:
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(clean, download=False)
-                    ch   = info.get("chapters") or []
-                    desc = info.get("description") or ""
-                    print(f"[analyzer] metadata ok (attempt {i}): chapters={len(ch)} desc_len={len(desc)}")
-                    return info
-            except Exception as e:
-                print(f"[analyzer] metadata attempt {i} failed: {str(e)[:120]}")
-    finally:
-        if cookies_file and os.path.exists(cookies_file):
-            os.unlink(cookies_file)
+        r = _req.get("https://api.invidious.io/instances.json?sort_by=health",
+                     timeout=6, headers=HEADERS)
+        if r.status_code == 200:
+            for item in r.json():
+                if isinstance(item, list) and len(item) >= 2:
+                    info = item[1]
+                    if info.get("api") and info.get("type") == "https":
+                        uri = info.get("uri", "").rstrip("/")
+                        if uri and uri not in INVIDIOUS_INSTANCES:
+                            extra.append(uri)
+                            if len(extra) >= 4:
+                                break
+    except Exception:
+        pass
 
+    for instance in INVIDIOUS_INSTANCES + extra:
+        try:
+            api_url = f"{instance}/api/v1/videos/{vid_id}"
+            r = _req.get(api_url, timeout=12, headers=HEADERS)
+            if r.status_code != 200:
+                print(f"[analyzer] Invidious {instance} → {r.status_code}")
+                continue
+            data = r.json()
+            print(f"[analyzer] Invidious ok: {instance}")
+
+            # Convert Invidious chapters → yt-dlp chapters format
+            inv_chapters = data.get("chapters") or []
+            chapters = []
+            for i, ch in enumerate(inv_chapters):
+                start = float(ch.get("start", 0))
+                end   = (float(inv_chapters[i+1]["start"])
+                         if i + 1 < len(inv_chapters)
+                         else float(data.get("lengthSeconds", 0)))
+                chapters.append({"title": ch.get("title",""), "start_time": start, "end_time": end})
+
+            desc = data.get("description") or data.get("descriptionHtml") or ""
+            # Strip HTML tags from descriptionHtml if needed
+            desc = re.sub(r"<[^>]+>", "", desc)
+            desc = desc.replace("&amp;","&").replace("&lt;","<").replace("&gt;",">").replace("&#39;","'").replace("&quot;",'"')
+
+            print(f"[analyzer] Invidious chapters={len(chapters)} desc={len(desc)}")
+            return {"chapters": chapters, "description": desc}
+        except Exception as e:
+            print(f"[analyzer] Invidious {instance} error: {str(e)[:80]}")
+            continue
+
+    print("[analyzer] all metadata attempts failed")
     return None
 
 
