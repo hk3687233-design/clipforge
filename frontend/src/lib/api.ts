@@ -32,6 +32,7 @@ export interface Product {
   clip_url?: string;
   clip_filename?: string;
   affiliate_url?: string;
+  resolution?: string;
   error?: string;
 }
 

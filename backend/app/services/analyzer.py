@@ -214,28 +214,33 @@ def _chapters_to_products(chapters: List[Dict], description: str, duration: floa
         if title.lower() in skip:
             continue
         start = float(ch.get("start_time", 0))
-        end   = float(ch.get("end_time", duration))
+        # Hard clamp: end must never exceed actual video duration
+        end   = min(float(ch.get("end_time", duration)), duration)
         raw.append({"title": title, "start": start, "end": end})
 
     if not raw:
         return []
 
-    # Calculate average chapter duration (excluding last which may be inflated)
+    # Re-derive end times from next chapter's start (most reliable)
+    # This ignores any wrong end_time values from Invidious/yt-dlp
+    for i in range(len(raw) - 1):
+        raw[i]["end"] = raw[i + 1]["start"]
+
+    # For the last chapter: estimate end from average of all other chapters
     durs = [r["end"] - r["start"] for r in raw[:-1]] if len(raw) > 1 else []
     avg_dur = (sum(durs) / len(durs)) if durs else 60.0
 
-    # Cap last chapter: if it's > 3x the average, trim it to avg * 1.5
-    if raw:
-        last = raw[-1]
-        last_dur = last["end"] - last["start"]
-        if last_dur > avg_dur * 3:
-            capped_end = round(last["start"] + avg_dur * 1.5, 2)
-            print(f"[analyzer] last chapter '{last['title']}' capped "
-                  f"{last_dur:.0f}s → {avg_dur*1.5:.0f}s  (avg={avg_dur:.0f}s)")
-            raw[-1]["end"] = capped_end
+    last = raw[-1]
+    # Last chapter end = start + avg, clamped to video duration
+    last["end"] = min(round(last["start"] + avg_dur, 2), duration)
+    print(f"[analyzer] last chapter '{last['title']}': "
+          f"{last['start']:.0f}s → {last['end']:.0f}s  ({last['end']-last['start']:.0f}s, avg={avg_dur:.0f}s)")
 
     products = []
     for r in raw:
+        seg_dur = r["end"] - r["start"]
+        if seg_dur < 1:
+            continue
         products.append({
             "name":          r["title"],
             "description":   "",
