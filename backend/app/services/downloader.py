@@ -225,8 +225,9 @@ def download_video(url: str, job_id: str) -> str:
         def _nc(d: dict) -> dict:  # no cookies
             return {k: v for k, v in d.items() if k != "cookiefile"}
 
-        PROG = "18/22/17/36/best[ext=mp4]/best"
-        DASH = "bestvideo[height<=720]+bestaudio/best"
+        # Full HD first, fallback to 720p/480p progressive
+        PROG = "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/22/18/17/best[ext=mp4]/best"
+        DASH = "bestvideo[height<=1080]+bestaudio/bestvideo[height<=720]+bestaudio/best"
 
         yt_attempts = [
             {**base_opts, "format": PROG, "extractor_args": _yt_args(["ios"])},

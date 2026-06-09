@@ -205,20 +205,45 @@ def _match_link(name: str, links: Dict[str, str]) -> str:
 
 
 def _chapters_to_products(chapters: List[Dict], description: str, duration: float) -> List[Dict]:
-    aff = _extract_all_links(description)
+    aff  = _extract_all_links(description)
     skip = {"intro", "outro", "introduction", "conclusion", "end", "opening", "sponsor", "ad"}
-    products = []
+
+    raw = []
     for ch in chapters:
         title = ch.get("title", "").strip()
         if title.lower() in skip:
             continue
         start = float(ch.get("start_time", 0))
         end   = float(ch.get("end_time", duration))
+        raw.append({"title": title, "start": start, "end": end})
+
+    if not raw:
+        return []
+
+    # Calculate average chapter duration (excluding last which may be inflated)
+    durs = [r["end"] - r["start"] for r in raw[:-1]] if len(raw) > 1 else []
+    avg_dur = (sum(durs) / len(durs)) if durs else 60.0
+
+    # Cap last chapter: if it's > 3x the average, trim it to avg * 1.5
+    if raw:
+        last = raw[-1]
+        last_dur = last["end"] - last["start"]
+        if last_dur > avg_dur * 3:
+            capped_end = round(last["start"] + avg_dur * 1.5, 2)
+            print(f"[analyzer] last chapter '{last['title']}' capped "
+                  f"{last_dur:.0f}s → {avg_dur*1.5:.0f}s  (avg={avg_dur:.0f}s)")
+            raw[-1]["end"] = capped_end
+
+    products = []
+    for r in raw:
         products.append({
-            "name": title, "description": "",
-            "start": round(start, 2), "end": round(end, 2),
-            "affiliate_url": _match_link(title, aff),
+            "name":          r["title"],
+            "description":   "",
+            "start":         round(r["start"], 2),
+            "end":           round(r["end"], 2),
+            "affiliate_url": _match_link(r["title"], aff),
         })
+
     print(f"[analyzer] Tier1 chapters={len(products)}  links={sum(1 for p in products if p['affiliate_url'])}")
     return products
 
