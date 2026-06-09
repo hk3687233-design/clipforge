@@ -53,13 +53,43 @@ INVIDIOUS_INSTANCES = [
 ]
 
 import requests as _req
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+def _fetch_invidious_metadata(instance: str, vid_id: str) -> Optional[Dict]:
+    """Fetch metadata from one Invidious instance. Returns parsed dict or None."""
+    HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    try:
+        r = _req.get(f"{instance}/api/v1/videos/{vid_id}", timeout=10, headers=HEADERS)
+        if r.status_code != 200:
+            return None
+        data = r.json()
+
+        # Convert Invidious chapters → standard format
+        inv_chapters = data.get("chapters") or []
+        chapters = []
+        for i, ch in enumerate(inv_chapters):
+            start = float(ch.get("start", 0))
+            end   = (float(inv_chapters[i+1]["start"])
+                     if i + 1 < len(inv_chapters)
+                     else float(data.get("lengthSeconds", 0)))
+            chapters.append({"title": ch.get("title", ""), "start_time": start, "end_time": end})
+
+        desc = data.get("description") or data.get("descriptionHtml") or ""
+        desc = re.sub(r"<[^>]+>", "", desc)
+        desc = (desc.replace("&amp;","&").replace("&lt;","<")
+                    .replace("&gt;",">").replace("&#39;","'").replace("&quot;",'"'))
+
+        return {"chapters": chapters, "description": desc, "_instance": instance}
+    except Exception:
+        return None
+
 
 def _get_yt_metadata(url: str) -> Optional[Dict]:
     """
     Fetch chapters + description.
     Strategy:
       1. yt-dlp (works locally, may be blocked on Railway)
-      2. Invidious API — bypasses Railway IP block completely
+      2. Invidious API parallel — all instances probed simultaneously, ~10s max wait
     """
     import base64, tempfile
     clean = _normalize_yt_url(url)
@@ -82,7 +112,7 @@ def _get_yt_metadata(url: str) -> Optional[Dict]:
     for client in (["ios"], ["tv_embedded"]):
         opts = {
             "quiet": True, "no_warnings": True, "skip_download": True,
-            "socket_timeout": 20,
+            "socket_timeout": 15,
             "extractor_args": {"youtube": {"player_client": client}},
         }
         if cookies_file:
@@ -104,64 +134,51 @@ def _get_yt_metadata(url: str) -> Optional[Dict]:
         try: os.unlink(cookies_file)
         except: pass
 
-    # ── Attempt 2: Invidious API (bypasses Railway block) ────────────
+    # ── Attempt 2: Invidious API — ALL instances in parallel ─────────
     if not vid_id:
         print("[analyzer] no video ID — cannot use Invidious")
         return None
 
+    # Build instance list + optionally enrich from api.invidious.io
+    instances = list(INVIDIOUS_INSTANCES)
     HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-
-    # Also try fresh instances from api.invidious.io
-    extra: List[str] = []
     try:
         r = _req.get("https://api.invidious.io/instances.json?sort_by=health",
-                     timeout=6, headers=HEADERS)
+                     timeout=5, headers=HEADERS)
         if r.status_code == 200:
             for item in r.json():
                 if isinstance(item, list) and len(item) >= 2:
                     info = item[1]
                     if info.get("api") and info.get("type") == "https":
                         uri = info.get("uri", "").rstrip("/")
-                        if uri and uri not in INVIDIOUS_INSTANCES:
-                            extra.append(uri)
-                            if len(extra) >= 4:
+                        if uri and uri not in instances:
+                            instances.append(uri)
+                            if len(instances) >= 16:
                                 break
     except Exception:
         pass
 
-    for instance in INVIDIOUS_INSTANCES + extra:
-        try:
-            api_url = f"{instance}/api/v1/videos/{vid_id}"
-            r = _req.get(api_url, timeout=12, headers=HEADERS)
-            if r.status_code != 200:
-                print(f"[analyzer] Invidious {instance} → {r.status_code}")
-                continue
-            data = r.json()
-            print(f"[analyzer] Invidious ok: {instance}")
+    print(f"[analyzer] Invidious parallel fetch: {len(instances)} instances")
+    result: Optional[Dict] = None
 
-            # Convert Invidious chapters → yt-dlp chapters format
-            inv_chapters = data.get("chapters") or []
-            chapters = []
-            for i, ch in enumerate(inv_chapters):
-                start = float(ch.get("start", 0))
-                end   = (float(inv_chapters[i+1]["start"])
-                         if i + 1 < len(inv_chapters)
-                         else float(data.get("lengthSeconds", 0)))
-                chapters.append({"title": ch.get("title",""), "start_time": start, "end_time": end})
+    with ThreadPoolExecutor(max_workers=len(instances)) as ex:
+        futs = {ex.submit(_fetch_invidious_metadata, inst, vid_id): inst
+                for inst in instances}
+        for fut in as_completed(futs):
+            data = fut.result()
+            if data:
+                result = data
+                inst   = data.pop("_instance", "?")
+                print(f"[analyzer] Invidious ✓ {inst}  "
+                      f"chapters={len(data['chapters'])} desc={len(data['description'])}")
+                for f in futs:
+                    f.cancel()
+                break
 
-            desc = data.get("description") or data.get("descriptionHtml") or ""
-            # Strip HTML tags from descriptionHtml if needed
-            desc = re.sub(r"<[^>]+>", "", desc)
-            desc = desc.replace("&amp;","&").replace("&lt;","<").replace("&gt;",">").replace("&#39;","'").replace("&quot;",'"')
+    if not result:
+        print("[analyzer] all Invidious instances failed")
 
-            print(f"[analyzer] Invidious chapters={len(chapters)} desc={len(desc)}")
-            return {"chapters": chapters, "description": desc}
-        except Exception as e:
-            print(f"[analyzer] Invidious {instance} error: {str(e)[:80]}")
-            continue
-
-    print("[analyzer] all metadata attempts failed")
-    return None
+    return result
 
 
 def _extract_all_links(description: str) -> Dict[str, str]:
@@ -296,18 +313,28 @@ def _parse_description_timestamps(description: str, duration: float) -> List[Dic
     if len(entries) < 2:
         return []
 
-    # Drop the last entry — its end time = video end (no next chapter),
-    # making a huge clip. Second-to-last is the real last product.
+    # Drop the last entry — its end would be video-end making a huge clip.
     entries = entries[:-1]
 
     aff  = _extract_all_links(description)
     skip = {"intro", "outro", "introduction", "end", "opening", "sponsor"}
     products = []
 
+    # Compute avg segment duration for last-entry clamping
+    avg_dur = 60.0
+    if len(entries) >= 2:
+        diffs = [entries[i+1]["start"] - entries[i]["start"]
+                 for i in range(len(entries)-1)]
+        avg_dur = sum(diffs) / len(diffs)
+
     for i, entry in enumerate(entries):
         if entry["name"].lower().strip() in skip:
             continue
-        end  = entries[i + 1]["start"] if i + 1 < len(entries) else duration
+        if i + 1 < len(entries):
+            end = entries[i + 1]["start"]
+        else:
+            # Last remaining entry: use avg duration, clamped to video end
+            end = min(round(entry["start"] + avg_dur, 2), duration)
         link = entry["link"] or _match_link(entry["name"], aff)
         products.append({
             "name": entry["name"], "description": "",
