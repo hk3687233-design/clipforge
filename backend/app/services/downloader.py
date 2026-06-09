@@ -213,6 +213,20 @@ def download_video(url: str, job_id: str) -> str:
         }
 
     if is_youtube:
+        video_id = _extract_video_id(url)
+
+        # ── Step 1: Invidious FIRST (Railway datacenter IP is permanently
+        #            blocked by YouTube — go straight to proxy) ───────────
+        if video_id:
+            print(f"[youtube] trying Invidious first (Railway IP bypass) id={video_id}")
+            inv_path = _try_invidious(video_id, out_dir)
+            if inv_path:
+                if cookies_file and os.path.exists(cookies_file):
+                    os.unlink(cookies_file)
+                return inv_path
+            print("[youtube] Invidious failed — falling back to yt-dlp")
+
+        # ── Step 2: yt-dlp fallback (works on non-Railway / future) ──────
         def _yt_args(clients: list, skip_js: bool = False) -> dict:
             args: dict = {"player_client": clients}
             if po_token and visitor_data:
@@ -222,10 +236,9 @@ def download_video(url: str, job_id: str) -> str:
                 args["player_skip"] = ["js", "configs"]
             return {"youtube": args}
 
-        def _nc(d: dict) -> dict:  # no cookies
+        def _nc(d: dict) -> dict:
             return {k: v for k, v in d.items() if k != "cookiefile"}
 
-        # Full HD first, fallback to 720p/480p progressive
         PROG = "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/22/18/17/best[ext=mp4]/best"
         DASH = "bestvideo[height<=1080]+bestaudio/bestvideo[height<=720]+bestaudio/best"
 
@@ -233,22 +246,15 @@ def download_video(url: str, job_id: str) -> str:
             {**base_opts, "format": PROG, "extractor_args": _yt_args(["ios"])},
             {**base_opts, "format": PROG, "extractor_args": _yt_args(["tv_embedded"])},
             {**base_opts, "format": PROG, "extractor_args": _yt_args(["android_testsuite"])},
-            {**base_opts, "format": PROG, "extractor_args": _yt_args(["android_vr"])},
             {**_nc(base_opts), "format": PROG, "extractor_args": _yt_args(["ios"])},
-            {**_nc(base_opts), "format": PROG, "extractor_args": _yt_args(["tv_embedded"])},
             {**_nc(base_opts), "format": DASH, "check_formats": False,
              "extractor_args": _yt_args(["ios"])},
-            {**_nc(base_opts), "check_formats": False,
-             "extractor_args": _yt_args(["ios", "tv_embedded"])},
         ]
 
-        # Try yt-dlp first
         last_error = None
         for i, opts in enumerate(yt_attempts):
             client = opts.get("extractor_args", {}).get("youtube", {}).get("player_client", ["?"])[0]
-            fmt = opts.get("format", "default")[:20]
-            has_c = "cookiefile" in opts
-            print(f"[yt-dlp] attempt {i+1}/{len(yt_attempts)}: client={client} fmt={fmt} cookies={has_c}")
+            print(f"[yt-dlp] attempt {i+1}/{len(yt_attempts)}: client={client}")
             try:
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     ydl.download([url])
@@ -256,21 +262,10 @@ def download_video(url: str, job_id: str) -> str:
                 print(f"[yt-dlp] ✓ success on attempt {i+1}")
                 break
             except Exception as e:
-                err_str = str(e)[:150]
-                print(f"[yt-dlp] ✗ attempt {i+1}: {err_str}")
+                print(f"[yt-dlp] ✗ {str(e)[:120]}")
                 last_error = e
-                continue
 
-        # ── Invidious fallback (bypasses Railway IP block completely) ─────
         if last_error:
-            video_id = _extract_video_id(url)
-            if video_id:
-                print(f"[invidious] yt-dlp failed, trying Invidious for video {video_id}")
-                inv_path = _try_invidious(video_id, out_dir)
-                if inv_path:
-                    if cookies_file and os.path.exists(cookies_file):
-                        os.unlink(cookies_file)
-                    return inv_path
             raise Exception(str(last_error))
 
     else:
