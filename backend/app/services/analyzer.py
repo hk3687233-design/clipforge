@@ -1,8 +1,9 @@
 """
 Smart product segment detector — 3-tier strategy:
-  1. YouTube chapters  → instant, 100% accurate (best)
-  2. Description parse → timestamps + affiliate links from text
-  3. Whisper fallback  → for videos with no metadata
+  1. YouTube chapters  → instant, most accurate
+  2. Description parse → timestamps + affiliate links
+  3. faster-whisper    → AI transcription fallback (3-min timeout)
+  Fallback: silence detection (if Whisper times out/errors)
 """
 import subprocess
 import os
@@ -17,6 +18,14 @@ def _p(path: str) -> str:
     return path.replace("\\", "/")
 
 
+def _normalize_yt_url(url: str) -> str:
+    """Clean any YouTube URL → youtube.com/watch?v=ID (strips ?si= etc.)"""
+    m = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url)
+    if m:
+        return f"https://www.youtube.com/watch?v={m.group(1)}"
+    return url
+
+
 def _get_duration(video_path: str) -> float:
     result = subprocess.run([
         "ffprobe", "-v", "error",
@@ -28,124 +37,165 @@ def _get_duration(video_path: str) -> float:
     return float(json.loads(result.stdout)["format"]["duration"])
 
 
-# ── Tier 1: YouTube chapters ───────────────────────────────────────────────
-
-def _normalize_yt_url(url: str) -> str:
-    """Strip ?si= and other tracking params from YouTube share links."""
-    m = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url)
-    if m:
-        return f"https://www.youtube.com/watch?v={m.group(1)}"
-    return url
+# ─────────────────────────────────────────────────────────────────────────────
+# Tier 1 helpers
+# ─────────────────────────────────────────────────────────────────────────────
 
 def _get_yt_metadata(url: str) -> Optional[Dict]:
-    """Fetch chapters + description from YouTube without downloading."""
-    try:
-        clean_url = _normalize_yt_url(url)
-        ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            return ydl.extract_info(clean_url, download=False)
-    except Exception:
-        return None
+    """Fetch chapters + description via yt-dlp (no download)."""
+    clean = _normalize_yt_url(url)
+    print(f"[analyzer] fetching metadata for {clean}")
+    for attempt, opts in enumerate([
+        {"quiet": True,  "no_warnings": True,  "skip_download": True},
+        {"quiet": False, "no_warnings": False, "skip_download": True,
+         "extractor_args": {"youtube": {"player_client": ["ios"]}}},
+    ], 1):
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(clean, download=False)
+                ch = info.get("chapters") or []
+                desc = info.get("description") or ""
+                print(f"[analyzer] metadata ok (attempt {attempt}): chapters={len(ch)} desc_len={len(desc)}")
+                return info
+        except Exception as e:
+            print(f"[analyzer] metadata attempt {attempt} failed: {e}")
+    return None
+
+
+def _extract_all_links(description: str) -> Dict[str, str]:
+    """
+    Scrape every affiliate/product link from description into {label_lower: url}.
+    Handles many formats:
+      0:26 - Curved Sofa - https://geni.us/xxx
+      0:26 Curved Sofa https://geni.us/xxx
+      Curved Sofa — https://amzn.to/xxx
+    """
+    links: Dict[str, str] = {}
+    for raw_line in description.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        m = re.search(r"(https?://\S+)", line)
+        if not m:
+            continue
+        url = m.group(1).rstrip(".,)")
+        label = line[:m.start()].strip()
+        # strip leading timestamp
+        label = re.sub(r"^\d{1,2}:\d{2}(?::\d{2})?\s*[-–:·•]?\s*", "", label)
+        # strip trailing separator
+        label = re.sub(r"\s*[-–:·•]\s*$", "", label).strip()
+        if label and len(label) > 2:
+            links[label.lower()] = url
+    return links
+
+
+def _match_link(name: str, links: Dict[str, str]) -> str:
+    """Best-match affiliate link for a product name."""
+    key = name.lower().strip()
+    if key in links:
+        return links[key]
+    # Longest matching label wins
+    best_url, best_len = "", 0
+    for label, url in links.items():
+        if (label in key or key in label) and len(label) > best_len:
+            best_url, best_len = url, len(label)
+    return best_url
 
 
 def _chapters_to_products(chapters: List[Dict], description: str, duration: float) -> List[Dict]:
-    """
-    Convert YouTube chapter data into product list.
-    Skips intro/outro chapters and matches affiliate links from description.
-    """
-    # Parse affiliate links from description
-    # Pattern: timestamp - Product Name - https://...
-    aff_links: Dict[str, str] = {}
-    for line in (description or "").splitlines():
-        m = re.search(
-            r"\d+:\d+\s*[-–]\s*(.+?)\s*[-–]\s*(https?://\S+)",
-            line.strip()
-        )
-        if m:
-            name_key = m.group(1).strip().lower()
-            aff_links[name_key] = m.group(2).strip()
-
-    skip_titles = {"intro", "outro", "introduction", "conclusion", "end", "opening"}
+    aff = _extract_all_links(description)
+    skip = {"intro", "outro", "introduction", "conclusion", "end", "opening", "sponsor", "ad"}
     products = []
-
     for ch in chapters:
         title = ch.get("title", "").strip()
-        if title.lower() in skip_titles:
+        if title.lower() in skip:
             continue
-
         start = float(ch.get("start_time", 0))
-        end = float(ch.get("end_time", duration))
-
-        # Match affiliate link by product name
-        aff_url = aff_links.get(title.lower(), "")
-        if not aff_url:
-            # Fuzzy match — try partial
-            for key, link in aff_links.items():
-                if key in title.lower() or title.lower() in key:
-                    aff_url = link
-                    break
-
+        end   = float(ch.get("end_time", duration))
         products.append({
-            "name": title,
-            "description": "",
-            "start": round(start, 2),
-            "end": round(end, 2),
-            "affiliate_url": aff_url,
+            "name": title, "description": "",
+            "start": round(start, 2), "end": round(end, 2),
+            "affiliate_url": _match_link(title, aff),
         })
-
+    print(f"[analyzer] Tier1 chapters={len(products)}  links={sum(1 for p in products if p['affiliate_url'])}")
     return products
 
 
-# ── Tier 2: Description timestamp parse ───────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Tier 2 helpers
+# ─────────────────────────────────────────────────────────────────────────────
 
 def _parse_description_timestamps(description: str, duration: float) -> List[Dict]:
     """
-    Parse timestamps from description text.
-    Handles: 0:22 - Product Name - https://link
-             0:22 Product Name https://link
+    Parse timestamp-based product list from description.
+    Supports H:MM:SS and MM:SS, optional separators, optional inline link.
     """
-    products = []
-    lines = description.splitlines()
     entries = []
+    # Two-pass: first collect all timestamp lines
+    TS_RE = re.compile(
+        r"^(?:(\d+):)?(\d{1,2}):(\d{2})"   # H:MM:SS or MM:SS
+        r"\s*[-–:·•]?\s*"                    # optional separator
+        r"(.+?)$",                            # label (may contain link)
+        re.MULTILINE
+    )
+    for m in TS_RE.finditer(description):
+        hours = int(m.group(1) or 0)
+        mins  = int(m.group(2))
+        secs  = int(m.group(3))
+        start = hours * 3600 + mins * 60 + secs
+        rest  = m.group(4).strip()
+        # split label from inline link
+        lm = re.search(r"\s+(https?://\S+)$", rest)
+        if lm:
+            label = rest[:lm.start()].strip()
+            link  = lm.group(1).rstrip(".,)")
+        else:
+            # trailing link after " - "
+            parts = re.split(r"\s*[-–]\s*", rest, maxsplit=1)
+            link_candidate = parts[-1].strip() if len(parts) > 1 else ""
+            if link_candidate.startswith("http"):
+                label = parts[0].strip()
+                link  = link_candidate
+            else:
+                label = rest.strip(" -–")
+                link  = ""
+        entries.append({"name": label, "start": float(start), "link": link})
 
-    for line in lines:
-        # Match: timestamp - name (- optional link)
-        m = re.match(
-            r"(\d+):(\d+)\s*[-–]?\s*(.+?)(?:\s*[-–]\s*(https?://\S+))?$",
-            line.strip()
-        )
-        if m:
-            mins, secs = int(m.group(1)), int(m.group(2))
-            start = mins * 60 + secs
-            name = m.group(3).strip()
-            link = m.group(4) or ""
-            entries.append({"name": name, "start": float(start), "link": link})
+    if len(entries) < 2:
+        return []
 
-    skip = {"intro", "outro", "introduction", "end", "opening"}
+    # Get all description links for fuzzy matching
+    aff = _extract_all_links(description)
+    skip = {"intro", "outro", "introduction", "end", "opening", "sponsor"}
+    products = []
 
     for i, entry in enumerate(entries):
-        if entry["name"].lower() in skip:
+        if entry["name"].lower().strip() in skip:
             continue
         end = entries[i + 1]["start"] if i + 1 < len(entries) else duration
+        # prefer inline link, fallback to description link match
+        link = entry["link"] or _match_link(entry["name"], aff)
         products.append({
-            "name": entry["name"],
-            "description": "",
+            "name": entry["name"], "description": "",
             "start": round(entry["start"], 2),
-            "end": round(end, 2),
-            "affiliate_url": entry["link"],
+            "end":   round(end, 2),
+            "affiliate_url": link,
         })
 
+    print(f"[analyzer] Tier2 segments={len(products)}  links={sum(1 for p in products if p['affiliate_url'])}")
     return products
 
 
-# ── Tier 3: faster-whisper fallback (replaces openai-whisper — 4x less RAM) ──
+# ─────────────────────────────────────────────────────────────────────────────
+# Tier 3: faster-whisper with 3-min hard timeout
+# ─────────────────────────────────────────────────────────────────────────────
 
 def _extract_audio(video_path: str, job_id: str) -> str:
     audio_path = os.path.join(settings.temp_dir, job_id, "audio.wav")
     result = subprocess.run([
         "ffmpeg", "-i", _p(video_path),
         "-ac", "1", "-ar", "16000", "-vn",
-        "-t", "600",          # max 10 min to avoid OOM on Railway
+        "-t", "600",
         _p(audio_path), "-y", "-loglevel", "error"
     ], capture_output=True, text=True)
     if result.returncode != 0:
@@ -154,32 +204,22 @@ def _extract_audio(video_path: str, job_id: str) -> str:
 
 
 def _transcribe_whisper(audio_path: str) -> List[Dict]:
-    """
-    faster-whisper: CTranslate2 backend — 4x faster, 4x less RAM than openai-whisper.
-    Hard timeout: if transcription takes > 3 min, raise TimeoutError so caller
-    falls back to silence-detection segmentation.
-    """
+    """faster-whisper with 3-minute hard timeout."""
     import threading
     from faster_whisper import WhisperModel
 
     result_holder: List = []
-    error_holder: List = []
+    error_holder:  List = []
 
     def _run():
         try:
             model = WhisperModel(settings.whisper_model, device="cpu", compute_type="int8")
-            segments_iter, _ = model.transcribe(
-                audio_path,
-                language="en",
-                beam_size=1,
-                vad_filter=True,
-                vad_parameters={"min_silence_duration_ms": 500},
+            segs, _ = model.transcribe(
+                audio_path, language="en", beam_size=1,
+                vad_filter=True, vad_parameters={"min_silence_duration_ms": 500},
             )
-            words = []
-            for seg in segments_iter:
-                text = seg.text.strip()
-                if text:
-                    words.append({"word": text, "start": seg.start, "end": seg.end})
+            words = [{"word": s.text.strip(), "start": s.start, "end": s.end}
+                     for s in segs if s.text.strip()]
             del model
             result_holder.append(words)
         except Exception as e:
@@ -187,88 +227,35 @@ def _transcribe_whisper(audio_path: str) -> List[Dict]:
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()
-    t.join(timeout=180)  # 3-minute hard limit
+    t.join(timeout=180)   # 3-min hard limit
 
     if t.is_alive():
-        raise TimeoutError("Whisper transcription exceeded 3-minute limit — falling back to silence detection")
+        raise TimeoutError("Whisper exceeded 3-min limit")
     if error_holder:
         raise error_holder[0]
     return result_holder[0] if result_holder else []
 
 
-def _silence_segments(video_path: str, duration: float) -> List[Dict]:
-    """
-    Fast fallback: split on silence points using ffmpeg (no ML, <10 sec).
-    Used when Whisper times out or errors.
-    """
-    res = subprocess.run([
-        "ffmpeg", "-i", _p(video_path),
-        "-af", "silencedetect=noise=-35dB:d=0.8",
-        "-f", "null", "-"
-    ], capture_output=True, text=True, timeout=60)
-
-    silence_pts = []
-    for line in res.stderr.splitlines():
-        m = re.search(r"silence_end:\s*([\d.]+)", line)
-        if m:
-            silence_pts.append(float(m.group(1)))
-
-    # Target ~60s segments, max 12 clips
-    target = max(30.0, min(90.0, duration / 10))
-    cuts = [0.0]
-    last = 0.0
-    for pt in silence_pts:
-        if pt - last >= target * 0.7:
-            cuts.append(round(pt, 2))
-            last = pt
-            if len(cuts) >= 12:
-                break
-    cuts.append(round(duration, 2))
-
-    products = []
-    for i in range(len(cuts) - 1):
-        start, end = cuts[i], cuts[i + 1]
-        if end - start < 5:
-            continue
-        m_s, s_s = int(start // 60), int(start % 60)
-        products.append({
-            "name": f"Segment {i + 1}  ({m_s}:{s_s:02d})",
-            "description": "",
-            "start": start,
-            "end": end,
-            "affiliate_url": "",
-        })
-    return products or [{"name": "Full Video", "description": "", "start": 0.0, "end": round(duration, 2), "affiliate_url": ""}]
-
-
-TRANSITION_PATTERNS = [
-    r"\bnext\b", r"\bmoving on\b", r"\bnumber\s+\d+\b", r"\bproduct\s+\d+\b",
-    r"\bfirst(?:ly)?\b", r"\bsecond(?:ly)?\b", r"\bthird(?:ly)?\b",
-    r"\bnext up\b", r"\bup next\b", r"\bstarting with\b",
-]
-_COMPILED = [re.compile(p, re.IGNORECASE) for p in TRANSITION_PATTERNS]
+TRANSITION_RE = re.compile(
+    r"\b(next up|next product|moving on|number\s+\d+|#\s*\d+"
+    r"|first(?:ly)?|second(?:ly)?|third(?:ly)?|fourth|fifth"
+    r"|up next|starting with|here we have|let'?s?\s+look)\b",
+    re.IGNORECASE
+)
 
 
 def _whisper_to_products(words: List[Dict], video_path: str, duration: float) -> List[Dict]:
-    # Silence breaks
+    """Convert Whisper segments into product blocks using transition detection."""
+    # Silence points
     res = subprocess.run([
         "ffmpeg", "-i", _p(video_path),
         "-af", "silencedetect=noise=-35dB:d=1.0",
         "-f", "null", "-"
     ], capture_output=True, text=True)
     silence_ts = [float(m.group(1)) for m in
-                  (re.search(r"silence_end:\s*([\d.]+)", line) for line in res.stderr.splitlines())
-                  if m]
+                  (re.search(r"silence_end:\s*([\d.]+)", l) for l in res.stderr.splitlines()) if m]
 
-    # Transition timestamps
-    trans_ts = []
-    for w in words:
-        chunk = w["word"]
-        for pat in _COMPILED:
-            if pat.search(chunk):
-                trans_ts.append(w["start"])
-                break
-
+    trans_ts = [w["start"] for w in words if TRANSITION_RE.search(w["word"])]
     raw = sorted(set(trans_ts + silence_ts))
     merged = []
     for t in raw:
@@ -286,63 +273,104 @@ def _whisper_to_products(words: List[Dict], video_path: str, duration: float) ->
         filtered[-1] = duration
 
     if len(filtered) < 2:
-        return [{"name": "Full Video", "description": "", "start": 0.0, "end": round(duration, 2), "affiliate_url": ""}]
+        return [{"name": "Full Video", "description": "", "start": 0.0,
+                 "end": round(duration, 2), "affiliate_url": ""}]
 
     products = []
     for i in range(len(filtered) - 1):
         start, end = filtered[i], filtered[i + 1]
         seg_words = [w["word"] for w in words if start <= w["start"] < start + 8]
         name = " ".join(seg_words)[:50].strip().title() or f"Product {i + 1}"
-        products.append({
-            "name": name, "description": "", "start": round(start, 2),
-            "end": round(end, 2), "affiliate_url": "",
-        })
+        products.append({"name": name, "description": "", "start": round(start, 2),
+                         "end": round(end, 2), "affiliate_url": ""})
     return products
 
 
-# ── Public API ─────────────────────────────────────────────────────────────
+def _silence_segments(video_path: str, duration: float) -> List[Dict]:
+    """Fast ffmpeg-only fallback (<10s). No ML."""
+    res = subprocess.run([
+        "ffmpeg", "-i", _p(video_path),
+        "-af", "silencedetect=noise=-35dB:d=0.8",
+        "-f", "null", "-"
+    ], capture_output=True, text=True, timeout=60)
+
+    pts = [float(m.group(1))
+           for m in (re.search(r"silence_end:\s*([\d.]+)", l) for l in res.stderr.splitlines()) if m]
+
+    target = max(30.0, min(90.0, duration / 10))
+    cuts = [0.0]; last = 0.0
+    for pt in pts:
+        if pt - last >= target * 0.7:
+            cuts.append(round(pt, 2)); last = pt
+            if len(cuts) >= 12:
+                break
+    cuts.append(round(duration, 2))
+
+    products = []
+    for i in range(len(cuts) - 1):
+        s, e = cuts[i], cuts[i + 1]
+        if e - s < 5:
+            continue
+        mm, ss = int(s // 60), int(s % 60)
+        products.append({"name": f"Segment {i + 1}  ({mm}:{ss:02d})", "description": "",
+                         "start": s, "end": e, "affiliate_url": ""})
+    return products or [{"name": "Full Video", "description": "",
+                         "start": 0.0, "end": round(duration, 2), "affiliate_url": ""}]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public API
+# ─────────────────────────────────────────────────────────────────────────────
 
 def analyze_video(video_path: str, job_id: str, source_url: str = None) -> Tuple[List[Dict], float]:
     """
-    Smart 3-tier analysis. Returns (products, duration).
+    3-tier analysis → (products, duration).
     Each product: {name, description, start, end, affiliate_url}
+    Clipper will cut a separate MP4 per product.
     """
     duration = _get_duration(video_path)
+    print(f"[analyzer] duration={duration:.1f}s  url={source_url or 'upload'}")
 
-    # ── Tier 1: YouTube chapters (fastest, most accurate) ──────────────
+    # ── Tier 1: YouTube chapters ──────────────────────────────────────
     if source_url:
         meta = _get_yt_metadata(source_url)
         if meta:
-            chapters = meta.get("chapters") or []
-            description = meta.get("description", "")
+            chapters    = meta.get("chapters") or []
+            description = meta.get("description") or ""
+
             if chapters:
                 products = _chapters_to_products(chapters, description, duration)
                 if products:
+                    print(f"[analyzer] ✅ Tier1 → {len(products)} products")
                     return products, duration
 
-            # ── Tier 2: Parse description timestamps ───────────────────
+            # ── Tier 2: Description timestamps ───────────────────────
             if description:
                 products = _parse_description_timestamps(description, duration)
                 if products:
+                    print(f"[analyzer] ✅ Tier2 → {len(products)} products")
                     return products, duration
+            else:
+                print("[analyzer] description empty — skipping Tier2")
 
-    # ── Tier 3: faster-whisper fallback ───────────────────────────────
+    # ── Tier 3: faster-whisper (3-min timeout) ────────────────────────
+    print("[analyzer] Tier3: faster-whisper transcription")
     try:
         audio_path = _extract_audio(video_path, job_id)
         words = _transcribe_whisper(audio_path)
-        # Clean up audio file to free disk
         try:
             os.remove(audio_path)
         except Exception:
             pass
         products = _whisper_to_products(words, video_path, duration)
+        print(f"[analyzer] ✅ Tier3 → {len(products)} products")
         return products, duration
     except TimeoutError as e:
-        print(f"[analyzer] {e}")
-        print("[analyzer] falling back to silence-detection segmentation")
-        products = _silence_segments(video_path, duration)
-        return products, duration
+        print(f"[analyzer] ⚠️  {e} → silence fallback")
     except Exception as e:
-        print(f"[analyzer] Whisper failed: {e} — falling back to silence detection")
-        products = _silence_segments(video_path, duration)
-        return products, duration
+        print(f"[analyzer] ⚠️  Whisper error: {e} → silence fallback")
+
+    # ── Silence fallback ──────────────────────────────────────────────
+    products = _silence_segments(video_path, duration)
+    print(f"[analyzer] ✅ Silence fallback → {len(products)} products")
+    return products, duration
