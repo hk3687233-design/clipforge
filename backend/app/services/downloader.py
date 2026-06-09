@@ -24,6 +24,17 @@ INVIDIOUS_INSTANCES = [
 def is_supported_url(url: str) -> bool:
     return any(domain in url for domain in SUPPORTED_DOMAINS)
 
+def _normalize_url(url: str) -> str:
+    """
+    Normalize YouTube URLs — strip tracking params like ?si= that cause
+    cookie-verification errors on share links (youtu.be/ID?si=...).
+    Always returns clean https://www.youtube.com/watch?v=ID form for YouTube.
+    """
+    video_id = _extract_video_id(url)
+    if video_id and ("youtube.com" in url or "youtu.be" in url):
+        return f"https://www.youtube.com/watch?v={video_id}"
+    return url
+
 def _extract_video_id(url: str) -> str | None:
     """Extract YouTube video ID from URL."""
     patterns = [
@@ -152,6 +163,9 @@ def _try_invidious(video_id: str, out_dir: str) -> str | None:
 
 def download_video(url: str, job_id: str) -> str:
     """Download video from URL using yt-dlp + Invidious fallback."""
+    url = _normalize_url(url)   # fix share links: youtu.be?si= → youtube.com/watch?v=
+    print(f"[downloader] normalized url={url}")
+
     out_dir = os.path.join(settings.temp_dir, job_id)
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "source.%(ext)s")

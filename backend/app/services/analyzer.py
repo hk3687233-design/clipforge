@@ -30,12 +30,20 @@ def _get_duration(video_path: str) -> float:
 
 # ── Tier 1: YouTube chapters ───────────────────────────────────────────────
 
+def _normalize_yt_url(url: str) -> str:
+    """Strip ?si= and other tracking params from YouTube share links."""
+    m = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url)
+    if m:
+        return f"https://www.youtube.com/watch?v={m.group(1)}"
+    return url
+
 def _get_yt_metadata(url: str) -> Optional[Dict]:
     """Fetch chapters + description from YouTube without downloading."""
     try:
+        clean_url = _normalize_yt_url(url)
         ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            return ydl.extract_info(url, download=False)
+            return ydl.extract_info(clean_url, download=False)
     except Exception:
         return None
 
@@ -146,23 +154,91 @@ def _extract_audio(video_path: str, job_id: str) -> str:
 
 
 def _transcribe_whisper(audio_path: str) -> List[Dict]:
-    """faster-whisper: CTranslate2 backend — 4x faster, 4x less RAM than openai-whisper."""
+    """
+    faster-whisper: CTranslate2 backend — 4x faster, 4x less RAM than openai-whisper.
+    Hard timeout: if transcription takes > 3 min, raise TimeoutError so caller
+    falls back to silence-detection segmentation.
+    """
+    import threading
     from faster_whisper import WhisperModel
-    model = WhisperModel(settings.whisper_model, device="cpu", compute_type="int8")
-    segments_iter, _ = model.transcribe(
-        audio_path,
-        language="en",
-        beam_size=1,
-        vad_filter=True,
-        vad_parameters={"min_silence_duration_ms": 500},
-    )
-    words = []
-    for seg in segments_iter:
-        text = seg.text.strip()
-        if text:
-            words.append({"word": text, "start": seg.start, "end": seg.end})
-    del model
-    return words
+
+    result_holder: List = []
+    error_holder: List = []
+
+    def _run():
+        try:
+            model = WhisperModel(settings.whisper_model, device="cpu", compute_type="int8")
+            segments_iter, _ = model.transcribe(
+                audio_path,
+                language="en",
+                beam_size=1,
+                vad_filter=True,
+                vad_parameters={"min_silence_duration_ms": 500},
+            )
+            words = []
+            for seg in segments_iter:
+                text = seg.text.strip()
+                if text:
+                    words.append({"word": text, "start": seg.start, "end": seg.end})
+            del model
+            result_holder.append(words)
+        except Exception as e:
+            error_holder.append(e)
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    t.join(timeout=180)  # 3-minute hard limit
+
+    if t.is_alive():
+        raise TimeoutError("Whisper transcription exceeded 3-minute limit — falling back to silence detection")
+    if error_holder:
+        raise error_holder[0]
+    return result_holder[0] if result_holder else []
+
+
+def _silence_segments(video_path: str, duration: float) -> List[Dict]:
+    """
+    Fast fallback: split on silence points using ffmpeg (no ML, <10 sec).
+    Used when Whisper times out or errors.
+    """
+    res = subprocess.run([
+        "ffmpeg", "-i", _p(video_path),
+        "-af", "silencedetect=noise=-35dB:d=0.8",
+        "-f", "null", "-"
+    ], capture_output=True, text=True, timeout=60)
+
+    silence_pts = []
+    for line in res.stderr.splitlines():
+        m = re.search(r"silence_end:\s*([\d.]+)", line)
+        if m:
+            silence_pts.append(float(m.group(1)))
+
+    # Target ~60s segments, max 12 clips
+    target = max(30.0, min(90.0, duration / 10))
+    cuts = [0.0]
+    last = 0.0
+    for pt in silence_pts:
+        if pt - last >= target * 0.7:
+            cuts.append(round(pt, 2))
+            last = pt
+            if len(cuts) >= 12:
+                break
+    cuts.append(round(duration, 2))
+
+    products = []
+    for i in range(len(cuts) - 1):
+        start, end = cuts[i], cuts[i + 1]
+        if end - start < 5:
+            continue
+        m_s, s_s = int(start // 60), int(start % 60)
+        products.append({
+            "name": f"Segment {i + 1}  ({m_s}:{s_s:02d})",
+            "description": "",
+            "start": start,
+            "end": end,
+            "affiliate_url": "",
+        })
+    return products or [{"name": "Full Video", "description": "", "start": 0.0, "end": round(duration, 2), "affiliate_url": ""}]
 
 
 TRANSITION_PATTERNS = [
@@ -251,7 +327,22 @@ def analyze_video(video_path: str, job_id: str, source_url: str = None) -> Tuple
                     return products, duration
 
     # ── Tier 3: faster-whisper fallback ───────────────────────────────
-    audio_path = _extract_audio(video_path, job_id)
-    words = _transcribe_whisper(audio_path)
-    products = _whisper_to_products(words, video_path, duration)
-    return products, duration
+    try:
+        audio_path = _extract_audio(video_path, job_id)
+        words = _transcribe_whisper(audio_path)
+        # Clean up audio file to free disk
+        try:
+            os.remove(audio_path)
+        except Exception:
+            pass
+        products = _whisper_to_products(words, video_path, duration)
+        return products, duration
+    except TimeoutError as e:
+        print(f"[analyzer] {e}")
+        print("[analyzer] falling back to silence-detection segmentation")
+        products = _silence_segments(video_path, duration)
+        return products, duration
+    except Exception as e:
+        print(f"[analyzer] Whisper failed: {e} — falling back to silence detection")
+        products = _silence_segments(video_path, duration)
+        return products, duration
