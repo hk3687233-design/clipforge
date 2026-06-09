@@ -208,15 +208,6 @@ def _try_invidious(video_id: str, out_dir: str) -> str | None:
             print(f"[invidious] {instance} API failed: {str(e)[:80]}")
 
     return None
-                    print(f"[invidious] ✓ API stream {size//1024}KB")
-                    return out_path
-                if os.path.exists(out_path):
-                    os.unlink(out_path)
-        except Exception as e:
-            print(f"[invidious] {instance} API method failed: {str(e)[:100]}")
-            continue
-
-    return None
 
 def download_video(url: str, job_id: str) -> str:
     """Download video from URL using yt-dlp + Invidious fallback."""
