@@ -16,9 +16,22 @@ INVIDIOUS_INSTANCES = [
     "https://invidious.projectsegfau.lt",
     "https://iv.ggtyler.dev",
     "https://invidious.lunar.icu",
-    "https://anontube.lvkaszus.pl",
     "https://invidious.privacyredirect.com",
     "https://yt.artemislena.eu",
+    "https://invidious.nerdvpn.de",
+    "https://invidious.incogniweb.net",
+    "https://inv.tux.pizza",
+    "https://invidious.io.lol",
+    "https://invidious.reallyaweso.me",
+    "https://invidious.perennialte.ch",
+]
+
+# Piped.video instances — additional fallback (different infra from Invidious)
+PIPED_INSTANCES = [
+    "https://pipedapi.kavin.rocks",
+    "https://pipedapi.adminforge.de",
+    "https://pipedapi.darkness.services",
+    "https://piped-api.garudalinux.org",
 ]
 
 def is_supported_url(url: str) -> bool:
@@ -57,26 +70,79 @@ def _get_cookies_file(b64: str) -> str | None:
     except Exception:
         return None
 
-def _try_invidious(video_id: str, out_dir: str) -> str | None:
-    """Try downloading via Invidious public instances (bypasses Railway IP block).
+def _download_stream(url: str, out_path: str, headers: dict, timeout: int = 120) -> int:
+    """Download a stream URL to file. Returns size in bytes."""
+    dl = _req.get(url, timeout=timeout, stream=True, headers=headers, allow_redirects=True)
+    if dl.status_code != 200:
+        return 0
+    size = 0
+    with open(out_path, "wb") as f:
+        for chunk in dl.iter_content(chunk_size=512 * 1024):
+            if chunk:
+                f.write(chunk)
+                size += len(chunk)
+    return size
 
-    Strategy:
-    1. Try /latest_version?id=&itag= (direct stream, no JSON parsing)
-    2. Try /api/v1/videos/ JSON → extract stream URL → download
-    Both methods tried across multiple instances.
+
+def _try_piped(video_id: str, out_dir: str) -> str | None:
+    """Piped.video API fallback — completely separate infrastructure from Invidious."""
+    HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+    for instance in PIPED_INSTANCES:
+        try:
+            r = _req.get(f"{instance}/streams/{video_id}", timeout=10, headers=HEADERS)
+            if r.status_code != 200:
+                print(f"[piped] {instance} → {r.status_code}")
+                continue
+            data = r.json()
+            # Piped returns audioStreams + videoStreams separately — find best combined mp4
+            streams = data.get("videoStreams", [])
+            # Prefer mimeType video/mp4, sort by quality desc
+            mp4 = [s for s in streams if "mp4" in s.get("mimeType", "") and s.get("videoOnly") == False]
+            if not mp4:
+                mp4 = [s for s in streams if "mp4" in s.get("mimeType", "")]
+            if not mp4:
+                print(f"[piped] {instance} no mp4 streams")
+                continue
+            mp4.sort(key=lambda s: s.get("quality", 0), reverse=True)
+            stream_url = mp4[0].get("url", "")
+            if not stream_url:
+                continue
+            out_path = os.path.join(out_dir, "source.mp4")
+            print(f"[piped] downloading q={mp4[0].get('quality')} @ {instance}")
+            size = _download_stream(stream_url, out_path, HEADERS)
+            if size > 100_000:
+                print(f"[piped] ✓ {size//1024}KB")
+                return out_path
+            if os.path.exists(out_path):
+                os.unlink(out_path)
+        except Exception as e:
+            print(f"[piped] {instance} error: {str(e)[:80]}")
+    return None
+
+
+def _try_invidious(video_id: str, out_dir: str) -> str | None:
+    """
+    Download via Invidious public instances (bypasses Railway IP block).
+
+    Method 1: /latest_version?id=&itag=&local=true
+      - local=true forces Invidious to proxy through itself (critical!)
+      - Without local=true, stream URL may point directly to YouTube CDN
+        which is also blocked from Railway datacenters
+
+    Method 2: /api/v1/videos/ JSON → proxied stream URL
     """
     HEADERS = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "*/*",
     }
-    # itag 22 = 720p MP4, 18 = 360p MP4 (progressive, no merge needed)
-    ITAGS = ["22", "18", "17"]
+    ITAGS = ["22", "18", "17"]   # 720p MP4, 360p MP4, 240p MP4
 
-    # Also try to get fresh instances from the official API
-    extra_instances: list[str] = []
+    # Fetch fresh healthy instances
+    extra: list[str] = []
     try:
-        resp = _req.get("https://api.invidious.io/instances.json?sort_by=health&pretty=1",
-                        timeout=8, headers=HEADERS)
+        resp = _req.get("https://api.invidious.io/instances.json?sort_by=health",
+                        timeout=6, headers=HEADERS)
         if resp.status_code == 200:
             for item in resp.json():
                 if isinstance(item, list) and len(item) >= 2:
@@ -84,73 +150,64 @@ def _try_invidious(video_id: str, out_dir: str) -> str | None:
                     if info.get("api") and info.get("type") == "https":
                         uri = info.get("uri", "").rstrip("/")
                         if uri and uri not in INVIDIOUS_INSTANCES:
-                            extra_instances.append(uri)
-                            if len(extra_instances) >= 5:
+                            extra.append(uri)
+                            if len(extra) >= 6:
                                 break
     except Exception as e:
-        print(f"[invidious] could not fetch live instance list: {e}")
+        print(f"[invidious] instance list fetch failed: {e}")
 
-    all_instances = INVIDIOUS_INSTANCES + extra_instances
-    print(f"[invidious] will try {len(all_instances)} instances: {all_instances[:4]}...")
+    all_instances = INVIDIOUS_INSTANCES + extra
+    print(f"[invidious] trying {len(all_instances)} instances for {video_id}")
 
     for instance in all_instances:
-        # ── Method 1: /latest_version direct stream ──────────────────────
+        # ── Method 1: /latest_version with local=true (proxied) ──────────
         for itag in ITAGS:
             try:
-                stream_url = f"{instance}/latest_version?id={video_id}&itag={itag}"
-                print(f"[invidious] latest_version itag={itag} @ {instance}")
-                dl = _req.get(stream_url, timeout=30, stream=True, headers=HEADERS,
-                              allow_redirects=True)
-                ct = dl.headers.get("content-type", "")
-                if dl.status_code == 200 and "video" in ct:
-                    ext = "mp4"
-                    out_path = os.path.join(out_dir, f"source.{ext}")
-                    size = 0
-                    with open(out_path, "wb") as f:
-                        for chunk in dl.iter_content(chunk_size=512 * 1024):
-                            if chunk:
-                                f.write(chunk)
-                                size += len(chunk)
-                    if size > 100_000:
-                        print(f"[invidious] ✓ latest_version itag={itag} {size//1024}KB")
-                        return out_path
-                    else:
-                        print(f"[invidious] too small ({size}B), skipping")
-                        if os.path.exists(out_path):
-                            os.unlink(out_path)
-                else:
-                    print(f"[invidious] latest_version {dl.status_code} ct={ct[:30]}")
+                # local=true = Invidious proxies through itself, not direct YT CDN
+                stream_url = f"{instance}/latest_version?id={video_id}&itag={itag}&local=true"
+                print(f"[invidious] latest_version itag={itag} local=true @ {instance}")
+                out_path = os.path.join(out_dir, "source.mp4")
+                size = _download_stream(stream_url, out_path, HEADERS, timeout=90)
+                if size > 100_000:
+                    print(f"[invidious] ✓ itag={itag} {size//1024}KB")
+                    return out_path
+                if size > 0:
+                    print(f"[invidious] too small {size}B, skip")
+                if os.path.exists(out_path) and size < 100_000:
+                    os.unlink(out_path)
             except Exception as e:
-                print(f"[invidious] latest_version failed: {str(e)[:100]}")
+                print(f"[invidious] latest_version failed: {str(e)[:80]}")
 
-        # ── Method 2: API JSON → stream URL ──────────────────────────────
+        # ── Method 2: API → proxied stream URL ───────────────────────────
         try:
-            api_url = f"{instance}/api/v1/videos/{video_id}"
-            r = _req.get(api_url, timeout=15, headers=HEADERS)
+            r = _req.get(f"{instance}/api/v1/videos/{video_id}", timeout=10, headers=HEADERS)
             if r.status_code != 200:
-                print(f"[invidious] {instance} API={r.status_code}, skip")
+                print(f"[invidious] {instance} API {r.status_code}, skip")
                 continue
             data = r.json()
             streams = data.get("formatStreams", [])
-            quality_order = {"hd720": 0, "large": 1, "medium": 2, "small": 3}
-            streams.sort(key=lambda s: quality_order.get(s.get("quality", ""), 99))
+            q_order = {"hd720": 0, "large": 1, "medium": 2, "small": 3}
+            streams.sort(key=lambda s: q_order.get(s.get("quality", ""), 99))
             for stream in streams:
-                stream_url = stream.get("url", "")
-                if not stream_url:
+                # Use proxied URL (replace direct CDN with instance proxy)
+                raw_url = stream.get("url", "")
+                if not raw_url:
                     continue
+                # Force proxy through Invidious instance
+                proxied = f"{instance}/latest_version?id={video_id}&itag={stream.get('itag','18')}&local=true"
                 ext = stream.get("container", "mp4")
                 out_path = os.path.join(out_dir, f"source.{ext}")
-                print(f"[invidious] API stream quality={stream.get('quality')} @ {instance}")
-                dl = _req.get(stream_url, timeout=120, stream=True, headers=HEADERS)
-                if dl.status_code != 200:
-                    continue
-                size = 0
-                with open(out_path, "wb") as f:
-                    for chunk in dl.iter_content(chunk_size=512 * 1024):
-                        if chunk:
-                            f.write(chunk)
-                            size += len(chunk)
+                print(f"[invidious] API proxied q={stream.get('quality')} @ {instance}")
+                size = _download_stream(proxied, out_path, HEADERS, timeout=120)
                 if size > 100_000:
+                    print(f"[invidious] ✓ API {size//1024}KB")
+                    return out_path
+                if os.path.exists(out_path) and size < 100_000:
+                    os.unlink(out_path)
+        except Exception as e:
+            print(f"[invidious] {instance} API failed: {str(e)[:80]}")
+
+    return None
                     print(f"[invidious] ✓ API stream {size//1024}KB")
                     return out_path
                 if os.path.exists(out_path):
@@ -215,16 +272,24 @@ def download_video(url: str, job_id: str) -> str:
     if is_youtube:
         video_id = _extract_video_id(url)
 
-        # ── Step 1: Invidious FIRST (Railway datacenter IP is permanently
-        #            blocked by YouTube — go straight to proxy) ───────────
+        # ── Step 1: Invidious FIRST (Railway datacenter IP blocked) ─────
         if video_id:
-            print(f"[youtube] trying Invidious first (Railway IP bypass) id={video_id}")
+            print(f"[youtube] Invidious proxy (id={video_id})")
             inv_path = _try_invidious(video_id, out_dir)
             if inv_path:
                 if cookies_file and os.path.exists(cookies_file):
                     os.unlink(cookies_file)
                 return inv_path
-            print("[youtube] Invidious failed — falling back to yt-dlp")
+            print("[youtube] Invidious failed — trying Piped.video")
+
+        # ── Step 1b: Piped.video fallback ─────────────────────────────
+        if video_id:
+            piped_path = _try_piped(video_id, out_dir)
+            if piped_path:
+                if cookies_file and os.path.exists(cookies_file):
+                    os.unlink(cookies_file)
+                return piped_path
+            print("[youtube] Piped failed — falling back to yt-dlp")
 
         # ── Step 2: yt-dlp fallback (works on non-Railway / future) ──────
         def _yt_args(clients: list, skip_js: bool = False) -> dict:
