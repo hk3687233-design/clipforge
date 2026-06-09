@@ -97,23 +97,28 @@ def _stream_to_file(url: str, out_path: str, connect_timeout: int = 8,
 def _probe_instance(instance: str, video_id: str) -> str | None:
     """
     Quick check: does this Invidious instance serve the video?
-    Uses a small Range GET (first 64 KB) — more reliable than HEAD
-    because many instances don't set content-type/length on HEAD.
-    Returns the working stream URL or None.
+    Uses a small Range GET — checks content-type AND first bytes
+    to avoid HTML error pages that are > 1KB.
+    Returns (stream_url, itag) tuple or None.
     """
     probe_hdr = {**HDR, "Range": "bytes=0-65535"}
-    for itag in ("22", "18"):          # 720p, 360p — progressive MP4
+    for itag in ("22", "18"):
         url = f"{instance}/latest_version?id={video_id}&itag={itag}&local=true"
         try:
             r = _req.get(url, headers=probe_hdr, timeout=10,
                          allow_redirects=True, stream=True)
-            # Accept 200 or 206 (partial content)
-            if r.status_code in (200, 206):
-                # Drain just the first chunk to confirm it's real video bytes
-                chunk = next(r.iter_content(chunk_size=4096), None)
+            if r.status_code not in (200, 206):
                 r.close()
-                if chunk and len(chunk) >= 1024:
-                    return url
+                continue
+            ct = r.headers.get("content-type", "")
+            # Must be video content, not HTML error page
+            if "video" not in ct and "octet-stream" not in ct:
+                r.close()
+                continue
+            chunk = next(r.iter_content(chunk_size=4096), None)
+            r.close()
+            if chunk and len(chunk) >= 512:
+                return url
         except Exception:
             pass
     return None
@@ -264,14 +269,14 @@ def download_video(url: str, job_id: str) -> str:
         if proxy:       base["proxy"]      = proxy
         if cookies_file: base["cookiefile"] = cookies_file
 
-        FMT  = "bestvideo[height<=1080]+bestaudio/22/18/best[ext=mp4]/best"
+        # Simple format — avoid merge-required DASH streams that need exact codecs
+        FMT = "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best"
         attempts = [
             {**base, "format": FMT,
              "extractor_args": {"youtube": {"player_client": ["ios"]}}},
             {**base, "format": FMT,
              "extractor_args": {"youtube": {"player_client": ["tv_embedded"]}}},
-            {**{k: v for k, v in base.items() if k != "cookiefile"},
-             "format": FMT,
+            {**base, "format": "best",
              "extractor_args": {"youtube": {"player_client": ["ios"]}}},
         ]
         last_err = None
