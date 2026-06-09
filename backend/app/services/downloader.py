@@ -97,17 +97,23 @@ def _stream_to_file(url: str, out_path: str, connect_timeout: int = 8,
 def _probe_instance(instance: str, video_id: str) -> str | None:
     """
     Quick check: does this Invidious instance serve the video?
-    Uses a Range request (first 32 KB) with a tight 8s timeout.
+    Uses a small Range GET (first 64 KB) — more reliable than HEAD
+    because many instances don't set content-type/length on HEAD.
     Returns the working stream URL or None.
     """
+    probe_hdr = {**HDR, "Range": "bytes=0-65535"}
     for itag in ("22", "18"):          # 720p, 360p — progressive MP4
         url = f"{instance}/latest_version?id={video_id}&itag={itag}&local=true"
         try:
-            h = _req.head(url, headers=HDR, timeout=8, allow_redirects=True)
-            ct = h.headers.get("content-type", "")
-            cl = int(h.headers.get("content-length", 0))
-            if h.status_code == 200 and "video" in ct and cl > 100_000:
-                return url          # instance is alive and has the video
+            r = _req.get(url, headers=probe_hdr, timeout=10,
+                         allow_redirects=True, stream=True)
+            # Accept 200 or 206 (partial content)
+            if r.status_code in (200, 206):
+                # Drain just the first chunk to confirm it's real video bytes
+                chunk = next(r.iter_content(chunk_size=4096), None)
+                r.close()
+                if chunk and len(chunk) >= 1024:
+                    return url
         except Exception:
             pass
     return None
