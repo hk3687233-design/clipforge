@@ -449,20 +449,33 @@ export default function Home() {
 
       {/* ── FOOTER ─────────────────────────────────────────────── */}
       <footer className="relative z-10 border-t border-white/5 py-10">
-        <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-brand-600 flex items-center justify-center">
-              <Scissors size={12} className="text-white" />
+        <div className="max-w-5xl mx-auto px-6 space-y-6">
+          {/* Disclaimer */}
+          <div className="rounded-xl border border-white/6 bg-white/[0.02] px-5 py-4 text-white/30 text-xs leading-relaxed text-center">
+            <strong className="text-white/45">Legal Notice:</strong> ClipForge is a neutral processing tool. Users are solely responsible for ensuring they have the necessary rights, licences, or permissions to process any video content. ClipForge does not host, store, or distribute third-party copyrighted material. Use of this tool must comply with the terms of service of the source platform and all applicable copyright laws. Intended uses include processing your own videos, licensed content, or content under fair use for review and commentary purposes.
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md bg-brand-600 flex items-center justify-center">
+                <Scissors size={12} className="text-white" />
+              </div>
+              <span className="font-bold text-sm">ClipForge</span>
+              <span className="text-white/25 text-sm">· Built for content creators</span>
             </div>
-            <span className="font-bold text-sm">ClipForge</span>
-            <span className="text-white/25 text-sm">· Built for content creators</span>
+            <div className="flex items-center gap-4 text-white/25 text-xs flex-wrap justify-center">
+              <span>© 2026 ClipForge</span>
+              <span>·</span>
+              <a href="/terms" className="hover:text-white/50 transition-colors">Terms</a>
+              <span>·</span>
+              <a href="/privacy" className="hover:text-white/50 transition-colors">Privacy</a>
+              <span>·</span>
+              <a href="/refund" className="hover:text-white/50 transition-colors">Refunds</a>
+              <span>·</span>
+              <a href="mailto:support@getclipforge.online" className="hover:text-white/50 transition-colors">support@getclipforge.online</a>
+            </div>
+            <LicenseGate onActivated={handleActivated} />
           </div>
-          <div className="flex items-center gap-4 text-white/25 text-xs">
-            <span>© 2026 ClipForge</span>
-            <span>·</span>
-            <a href="mailto:support@getclipforge.online" className="hover:text-white/50 transition-colors">support@getclipforge.online</a>
-          </div>
-          <LicenseGate onActivated={handleActivated} />
         </div>
       </footer>
 
