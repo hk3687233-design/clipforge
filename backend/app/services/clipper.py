@@ -32,16 +32,16 @@ def _get_video_resolution(video_path: str) -> str:
 
 def extract_clip(video_path: str, job_id: str, product: Dict, index: int) -> str:
     """
-    Frame-accurate clip cut using input-side seek + libx264 re-encode.
-
-    Input-side -ss (before -i) is fast AND accurate because ffmpeg
-    re-encodes from the nearest keyframe, so the clip starts at the
-    exact requested timestamp — no 'previous product bleeds in' issue.
+    Frame-accurate clip using two-pass seek:
+      1. Input-side -ss seeks to keyframe ~2s before target (fast)
+      2. Output-side -ss fine-tunes to exact frame (accurate)
+    This eliminates previous-product bleed without the speed cost of
+    pure output seeking on long videos.
 
     Quality:
-      - Video : libx264, CRF 18 (near-lossless), veryfast preset
+      - Video : libx264, CRF 17, medium preset (better compression than veryfast)
       - Scale  : max 1920x1080, keep aspect ratio
-      - Audio  : AAC 192 kbps
+      - Audio  : AAC 256 kbps
     """
     clips_dir = os.path.join(settings.temp_dir, job_id, "clips")
     os.makedirs(clips_dir, exist_ok=True)
@@ -55,23 +55,26 @@ def extract_clip(video_path: str, job_id: str, product: Dict, index: int) -> str
     if duration <= 0:
         raise ValueError(f"Invalid duration for '{product['name']}': {duration:.1f}s")
 
-    # Hard-guard: never cut more than 10 minutes per clip
     duration = min(duration, 600.0)
+
+    # Two-pass seek: fast input seek to ~2s before, then exact output seek
+    pre_seek  = max(0.0, start - 2.0)
+    fine_seek = start - pre_seek
 
     cmd = [
         "ffmpeg",
-        "-ss", f"{start:.3f}",
+        "-ss", f"{pre_seek:.3f}",   # Input seek — jump to keyframe near target
         "-i",  _p(video_path),
+        "-ss", f"{fine_seek:.3f}",  # Output seek — frame-accurate trim
         "-t",  f"{duration:.3f}",
         "-c:v", "libx264",
-        "-crf", "18",
-        "-preset", "veryfast",
-        "-vf", "scale='min(2560,iw)':'min(1440,ih)':force_original_aspect_ratio=decrease",
+        "-crf", "17",               # Slightly higher quality (was 18)
+        "-preset", "medium",        # Better quality per bit than veryfast
+        "-vf", "scale='min(1920,iw)':'min(1080,ih)':force_original_aspect_ratio=decrease",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
-        "-b:a", "192k",
+        "-b:a", "256k",             # Higher audio bitrate (was 192k)
         "-movflags", "+faststart",
-        "-avoid_negative_ts", "make_zero",
         _p(out_path),
         "-y",
         "-loglevel", "error",

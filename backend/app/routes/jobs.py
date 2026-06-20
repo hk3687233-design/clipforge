@@ -105,38 +105,32 @@ def get_job(job_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{job_id}/clips/download-all")
 def download_all_clips(job_id: str):
-    """Bundle all clips into a ZIP and serve with full headers IDM needs."""
+    """Stream ZIP of all clips — never loads entire file into RAM."""
+    from fastapi.responses import FileResponse as _FileResponse
+    import itertools
+
     clips_dir = os.path.join(settings.temp_dir, job_id, "clips")
     if not os.path.exists(clips_dir):
         raise HTTPException(404, "No clips found for this job")
 
-    clips = [f for f in os.listdir(clips_dir) if f.endswith(".mp4")]
+    clips = sorted(f for f in os.listdir(clips_dir) if f.endswith(".mp4"))
     if not clips:
         raise HTTPException(404, "No clips available")
 
-    # Build ZIP on disk (reuse if already exists)
     zip_path = os.path.join(settings.temp_dir, job_id, "clips.zip")
     if not os.path.exists(zip_path):
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED) as zf:
-            for clip in sorted(clips):
+            for clip in clips:
                 zf.write(os.path.join(clips_dir, clip), clip)
 
-    zip_size = os.path.getsize(zip_path)
     zip_name = f"clipforge_{job_id[:8]}.zip"
 
-    # Read and return with explicit headers — fixes IDM "resume" error
-    with open(zip_path, "rb") as f:
-        data = f.read()
-
-    return Response(
-        content=data,
+    # Stream directly from disk — zero RAM overhead regardless of ZIP size
+    return _FileResponse(
+        zip_path,
         media_type="application/zip",
-        headers={
-            "Content-Disposition": f'attachment; filename="{zip_name}"',
-            "Content-Length": str(zip_size),
-            "Accept-Ranges": "none",
-            "Cache-Control": "no-cache",
-        },
+        filename=zip_name,
+        headers={"Content-Disposition": f'attachment; filename="{zip_name}"'},
     )
 
 

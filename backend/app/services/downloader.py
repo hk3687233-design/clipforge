@@ -96,12 +96,14 @@ def _stream_to_file(url: str, out_path: str, connect_timeout: int = 8,
 
 def _probe_instance(instance: str, video_id: str) -> str | None:
     """
-    Quick check: does this Invidious instance serve the video?
-    Uses a small Range GET — checks content-type AND first bytes
-    to avoid HTML error pages that are > 1KB.
-    Returns (stream_url, itag) tuple or None.
+    Probe instance for best available quality.
+    Try itags in quality order: 137+140 merge (1080p), 22 (720p), 18 (360p).
+    Returns stream URL for best available combined format.
     """
     probe_hdr = {**HDR, "Range": "bytes=0-65535"}
+
+    # itag 22 = 720p combined, itag 18 = 360p combined
+    # itag 137 = 1080p video-only (needs audio merge — handled separately)
     for itag in ("22", "18"):
         url = f"{instance}/latest_version?id={video_id}&itag={itag}&local=true"
         try:
@@ -111,7 +113,6 @@ def _probe_instance(instance: str, video_id: str) -> str | None:
                 r.close()
                 continue
             ct = r.headers.get("content-type", "")
-            # Must be video content, not HTML error page
             if "video" not in ct and "octet-stream" not in ct:
                 r.close()
                 continue
@@ -121,6 +122,54 @@ def _probe_instance(instance: str, video_id: str) -> str | None:
                 return url
         except Exception:
             pass
+    return None
+
+
+def _try_1080p_invidious(instance: str, video_id: str, out_dir: str) -> str | None:
+    """
+    Download 1080p by merging video-only (itag 137) + audio-only (itag 140)
+    using FFmpeg. Falls back to None if unavailable.
+    """
+    import subprocess
+    probe_hdr = {**HDR, "Range": "bytes=0-65535"}
+
+    def _check(itag: str) -> str | None:
+        url = f"{instance}/latest_version?id={video_id}&itag={itag}&local=true"
+        try:
+            r = _req.get(url, headers=probe_hdr, timeout=10,
+                         allow_redirects=True, stream=True)
+            if r.status_code not in (200, 206):
+                r.close(); return None
+            ct = r.headers.get("content-type", "")
+            if "video" not in ct and "audio" not in ct and "octet-stream" not in ct:
+                r.close(); return None
+            chunk = next(r.iter_content(chunk_size=4096), None)
+            r.close()
+            return url if (chunk and len(chunk) >= 512) else None
+        except Exception:
+            return None
+
+    vid_url = _check("137")  # 1080p video only
+    aud_url = _check("140")  # 128k AAC audio only
+    if not vid_url or not aud_url:
+        return None
+
+    out_path = os.path.join(out_dir, "source.mp4")
+    try:
+        result = subprocess.run([
+            "ffmpeg",
+            "-i", vid_url, "-i", aud_url,
+            "-c:v", "copy", "-c:a", "copy",
+            "-movflags", "+faststart",
+            out_path, "-y", "-loglevel", "error",
+        ], capture_output=True, timeout=300)
+        if result.returncode == 0 and os.path.getsize(out_path) > 100_000:
+            print(f"[invidious] ✓ 1080p merged from {instance}")
+            return out_path
+        if os.path.exists(out_path):
+            os.unlink(out_path)
+    except Exception:
+        pass
     return None
 
 
@@ -169,9 +218,15 @@ def _download_from_invidious(video_id: str, out_dir: str) -> str | None:
         print("[invidious] all instances failed probe")
         return None
 
-    # Full download from the winning instance
+    # Extract instance from winning URL and try 1080p first
+    winning_instance = working_url.split("/latest_version")[0]
+    path_1080p = _try_1080p_invidious(winning_instance, video_id, out_dir)
+    if path_1080p:
+        return path_1080p
+
+    # Fall back to 720p/360p combined stream
     out_path = os.path.join(out_dir, "source.mp4")
-    print(f"[invidious] downloading: {working_url[:70]}…")
+    print(f"[invidious] downloading 720p: {working_url[:70]}…")
     size = _stream_to_file(working_url, out_path, connect_timeout=10, read_timeout=300)
     if size > 100_000:
         print(f"[invidious] ✓ downloaded {size // 1024} KB")
