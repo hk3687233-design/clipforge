@@ -181,6 +181,13 @@ def _get_yt_metadata(url: str) -> Optional[Dict]:
     return result
 
 
+def _clean_name(name: str) -> str:
+    """Strip any embedded URLs and trailing punctuation from a product name."""
+    name = re.sub(r"\s+https?://\S+", "", name)
+    name = re.sub(r"\s*[-–:·•]+\s*$", "", name)
+    return name.strip()
+
+
 def _extract_all_links(description: str) -> Dict[str, str]:
     """
     Scrape every affiliate/product link from description into {label_lower: url}.
@@ -259,7 +266,7 @@ def _chapters_to_products(chapters: List[Dict], description: str, duration: floa
         if seg_dur < 1:
             continue
         products.append({
-            "name":          r["title"],
+            "name":          _clean_name(r["title"]),
             "description":   "",
             "start":         round(r["start"], 2),
             "end":           round(r["end"], 2),
@@ -337,7 +344,7 @@ def _parse_description_timestamps(description: str, duration: float) -> List[Dic
             end = min(round(entry["start"] + avg_dur, 2), duration)
         link = entry["link"] or _match_link(entry["name"], aff)
         products.append({
-            "name": entry["name"], "description": "",
+            "name": _clean_name(entry["name"]), "description": "",
             "start": round(entry["start"], 2),
             "end":   round(end, 2),
             "affiliate_url": link,
@@ -571,7 +578,7 @@ Rules:
             if not name or end <= start or start < 0:
                 continue
             products.append({
-                "name":          name,
+                "name":          _clean_name(name),
                 "description":   "",
                 "start":         round(max(0.0, start), 2),
                 "end":           round(min(end, duration), 2),

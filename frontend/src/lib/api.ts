@@ -20,8 +20,8 @@ export async function verifyLicense(key: string): Promise<boolean> {
   }
 }
 
-export function getZipDownloadUrl(jobId: string, q = "source"): string {
-  return `${API_BASE}/api/jobs/${jobId}/clips/download-all${q !== "source" ? `?q=${q}` : ""}`;
+export function getZipDownloadUrl(jobId: string): string {
+  return `${API_BASE}/api/jobs/${jobId}/clips/download-all`;
 }
 
 export interface Product {
@@ -59,6 +59,6 @@ export async function getJob(jobId: string): Promise<Job> {
   return res.data;
 }
 
-export function getClipDownloadUrl(jobId: string, filename: string, q = "source"): string {
-  return `${API_BASE}/api/jobs/${jobId}/clips/${filename}${q !== "source" ? `?q=${q}` : ""}`;
+export function getClipDownloadUrl(jobId: string, filename: string): string {
+  return `${API_BASE}/api/jobs/${jobId}/clips/${filename}`;
 }
