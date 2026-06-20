@@ -17,7 +17,7 @@ interface UserRow {
 }
 interface LicenseRow {
   key: string; email?: string; plan: string; is_valid: boolean;
-  jobs_used: number; activated_at?: string; created_at?: string;
+  jobs_used: number; used_by_user: boolean; activated_at?: string; created_at?: string;
 }
 interface Stats {
   licenses: { total: number; pro: number; free: number };
@@ -378,11 +378,13 @@ export default function AdminPage() {
                   </td>
                   <td className="px-4 py-3 text-xs text-white/40">{l.jobs_used || 0}</td>
                   <td className="px-4 py-3">
-                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                      l.is_valid
-                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                        : "bg-red-500/10 text-red-400 border border-red-500/20"
-                    }`}>{l.is_valid ? "Active" : "Disabled"}</span>
+                    {!l.is_valid ? (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">Disabled</span>
+                    ) : l.used_by_user ? (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-brand-500/15 text-brand-400 border border-brand-500/25">Used ✓</span>
+                    ) : (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">Unused</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-xs text-white/30 whitespace-nowrap">
                     {l.created_at ? new Date(l.created_at).toLocaleDateString() : "—"}

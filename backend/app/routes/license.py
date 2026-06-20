@@ -259,19 +259,24 @@ def admin_list_licenses(
         .limit(limit)
         .all()
     )
+    # Build set of keys already activated by a user account
+    activated_keys = {
+        u.license_key
+        for u in db.query(User).filter(User.license_key.isnot(None)).all()
+    }
     return {
         "total": total,
         "page": page,
         "items": [
             {
-                "key": l.key,
-                "email": l.email,
-                "plan": l.plan,
-                "is_valid": l.is_valid,
-                "jobs_used": l.jobs_used,
-                "device_bound": bool(l.device_id),
-                "activated_at": l.activated_at.isoformat() if l.activated_at else None,
-                "created_at": l.created_at.isoformat() if l.created_at else None,
+                "key":           l.key,
+                "email":         l.email,
+                "plan":          l.plan,
+                "is_valid":      l.is_valid,
+                "jobs_used":     l.jobs_used,
+                "used_by_user":  l.key in activated_keys,
+                "activated_at":  l.activated_at.isoformat() if l.activated_at else None,
+                "created_at":    l.created_at.isoformat() if l.created_at else None,
             }
             for l in items
         ],
@@ -331,13 +336,8 @@ def admin_generate_license(
     db.add(lic)
     db.commit()
 
-    # Also link key + upgrade plan to existing user account
+    # Send email — do NOT auto-activate; user must manually enter key
     if email:
-        existing_user = db.query(User).filter(User.email == email.strip().lower()).first()
-        if existing_user:
-            existing_user.license_key = key
-            existing_user.plan = plan
-            db.commit()
         send_license_email(email, key, plan)
 
     return {"key": key, "plan": plan, "email": email}

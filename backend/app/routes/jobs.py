@@ -24,7 +24,8 @@ limiter = Limiter(key_func=get_remote_address)
 
 FREE_DAILY_LIMIT  = 3
 FREE_CLIPS_LIMIT  = 5
-FREE_MAX_DURATION = 600  # 10 minutes in seconds
+FREE_MAX_DURATION = 600   # 10 minutes in seconds
+PRO_DAILY_LIMIT   = 40    # protects Gemini API quota (1500 RPD / ~2 calls per job)
 
 
 # ── Auth helper: accept JWT Bearer OR legacy X-License-Key ─────────────────
@@ -81,19 +82,30 @@ async def create_job(
 
     plan = auth.plan
 
-    # ── Free plan restrictions ────────────────────────────────────────
-    if plan == "free":
-        if auth.user:
-            today = date.today().isoformat()
-            user  = auth.user
-            if user.daily_jobs_date != today:
-                user.daily_jobs_used = 0
-                user.daily_jobs_date = today
-            if user.daily_jobs_used >= FREE_DAILY_LIMIT:
-                raise HTTPException(429, f"Free plan limit: {FREE_DAILY_LIMIT} exports per day. Upgrade to Pro for unlimited access.")
-        else:
-            # Legacy free license key — keep coming-soon block
-            raise HTTPException(403, "Free plan is coming soon. Upgrade to Pro for immediate access.")
+    # ── Plan restrictions (JWT users only) ───────────────────────────
+    if auth.user:
+        today_str = date.today().isoformat()
+        u = auth.user
+        # Reset counter when date changes
+        if u.daily_jobs_date != today_str:
+            u.daily_jobs_used = 0
+            u.daily_jobs_date = today_str
+
+        if plan == "free" and u.daily_jobs_used >= FREE_DAILY_LIMIT:
+            raise HTTPException(
+                429,
+                f"Free plan limit: {FREE_DAILY_LIMIT} exports/day reached. "
+                "Upgrade to Pro for more access, or try again tomorrow."
+            )
+        if plan == "pro" and u.daily_jobs_used >= PRO_DAILY_LIMIT:
+            raise HTTPException(
+                429,
+                f"Daily limit reached ({PRO_DAILY_LIMIT} exports/day). "
+                "Limit resets at midnight UTC. This keeps our AI services running smoothly for all users."
+            )
+    elif plan == "free":
+        # Legacy free key — no account, block
+        raise HTTPException(403, "Please sign in to use the free plan.")
 
     job_id     = str(uuid.uuid4())
     local_path = None
@@ -124,8 +136,8 @@ async def create_job(
     )
     db.add(job)
 
-    # Increment daily counter for JWT free users
-    if plan == "free" and auth.user:
+    # Increment daily counter for all JWT users
+    if auth.user:
         auth.user.daily_jobs_used = (auth.user.daily_jobs_used or 0) + 1
 
     # Increment legacy license counter
