@@ -480,16 +480,127 @@ def _silence_segments(video_path: str, duration: float) -> List[Dict]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Tier 3b: Gemini Flash — intelligent product extraction from transcript
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _gemini_from_transcript(words: List[Dict], description: str, duration: float) -> List[Dict]:
+    """
+    Send Whisper transcript + description to Gemini Flash.
+    Returns structured product list or [] on any failure.
+    Free tier: 1M tokens/day, 15 RPM — sufficient for SaaS scale.
+    """
+    from app.config import settings
+    if not settings.gemini_api_key:
+        return []
+
+    try:
+        import google.generativeai as genai
+    except ImportError:
+        print("[analyzer] google-generativeai not installed — skipping Gemini")
+        return []
+
+    # Build compressed timestamped transcript (~10-second chunks)
+    chunks: List[str] = []
+    chunk_words: List[str] = []
+    chunk_start = 0.0
+    for w in words:
+        if not chunk_words:
+            chunk_start = float(w.get("start", 0))
+        chunk_words.append(str(w.get("word", "")).strip())
+        if float(w.get("start", 0)) - chunk_start >= 10:
+            mm, ss = int(chunk_start // 60), int(chunk_start % 60)
+            chunks.append(f"[{mm:02d}:{ss:02d}] {' '.join(chunk_words)}")
+            chunk_words = []
+    if chunk_words:
+        mm, ss = int(chunk_start // 60), int(chunk_start % 60)
+        chunks.append(f"[{mm:02d}:{ss:02d}] {' '.join(chunk_words)}")
+
+    transcript = "\n".join(chunks[:600])  # cap ~600 lines to stay within token limit
+
+    aff = _extract_all_links(description) if description else {}
+    aff_text = "\n".join(f"{n}: {u}" for n, u in list(aff.items())[:60]) or "none"
+
+    dur_str = f"{int(duration // 60)}m {int(duration % 60)}s ({duration:.0f}s)"
+
+    prompt = f"""Analyze this product review video transcript and extract every product segment.
+
+TRANSCRIPT (MM:SS timestamps):
+{transcript}
+
+AFFILIATE LINKS FROM VIDEO DESCRIPTION (match to products by name):
+{aff_text}
+
+VIDEO DURATION: {dur_str}
+
+Return ONLY a valid JSON array — no markdown, no explanation. Each item:
+{{
+  "name": "product name",
+  "start": <seconds as number>,
+  "end": <seconds as number>,
+  "affiliate_url": "<url or empty string>"
+}}
+
+Rules:
+- Include ONLY actual product segments (skip intro, outro, sponsor, unboxing intro, etc.)
+- start and end must be within 0 and {duration:.0f}
+- Minimum segment length: 10 seconds
+- Match affiliate_url from the description links above where possible"""
+
+    try:
+        genai.configure(api_key=settings.gemini_api_key)
+        model = genai.GenerativeModel(
+            "gemini-1.5-flash",
+            generation_config={"temperature": 0.1, "max_output_tokens": 4096},
+        )
+        resp  = model.generate_content(prompt)
+        text  = resp.text.strip()
+        text  = re.sub(r"^```(?:json)?\s*", "", text)
+        text  = re.sub(r"\s*```$",          "", text).strip()
+
+        raw = json.loads(text)
+        if not isinstance(raw, list):
+            return []
+
+        products = []
+        for p in raw:
+            if not isinstance(p, dict):
+                continue
+            name  = str(p.get("name", "")).strip()
+            start = float(p.get("start", 0))
+            end   = float(p.get("end",   0))
+            if not name or end <= start or start < 0:
+                continue
+            products.append({
+                "name":          name,
+                "description":   "",
+                "start":         round(max(0.0, start), 2),
+                "end":           round(min(end, duration), 2),
+                "affiliate_url": str(p.get("affiliate_url", "")),
+            })
+
+        print(f"[analyzer] Gemini → {len(products)} products")
+        return products
+
+    except Exception as e:
+        print(f"[analyzer] Gemini error: {str(e)[:120]}")
+        return []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
 
 def analyze_video(video_path: str, job_id: str, source_url: str = None) -> Tuple[List[Dict], float]:
     """
-    3-tier analysis → (products, duration).
-    Each product: {name, description, start, end, affiliate_url}
-    Clipper will cut a separate MP4 per product.
+    4-tier analysis → (products, duration).
+    Tier 1: YouTube chapters (instant, most accurate)
+    Tier 2: Description timestamp parsing
+    Tier 3: Whisper → Gemini Flash (free API, intelligent)
+    Tier 4: Whisper transition-word detection
+    Fallback: silence segmentation
     """
-    duration = _get_duration(video_path)
+    duration    = _get_duration(video_path)
+    description = ""  # shared across tiers
     print(f"[analyzer] duration={duration:.1f}s  url={source_url or 'upload'}")
 
     # ── Tier 1: YouTube chapters ──────────────────────────────────────
@@ -514,18 +625,27 @@ def analyze_video(video_path: str, job_id: str, source_url: str = None) -> Tuple
             else:
                 print("[analyzer] description empty — skipping Tier2")
 
-    # ── Tier 3: faster-whisper (3-min timeout) ────────────────────────
+    # ── Tier 3/4: faster-whisper ──────────────────────────────────────
     print("[analyzer] Tier3: faster-whisper transcription")
     try:
         audio_path = _extract_audio(video_path, job_id)
-        words = _transcribe_whisper(audio_path)
+        words      = _transcribe_whisper(audio_path)
         try:
             os.remove(audio_path)
         except Exception:
             pass
+
+        # ── Tier 3: Gemini Flash (free, intelligent) ──────────────────
+        products = _gemini_from_transcript(words, description, duration)
+        if products:
+            print(f"[analyzer] ✅ Tier3-Gemini → {len(products)} products")
+            return products, duration
+
+        # ── Tier 4: Whisper transition-word detection ─────────────────
         products = _whisper_to_products(words, video_path, duration)
-        print(f"[analyzer] ✅ Tier3 → {len(products)} products")
+        print(f"[analyzer] ✅ Tier4-Whisper → {len(products)} products")
         return products, duration
+
     except TimeoutError as e:
         print(f"[analyzer] ⚠️  {e} → silence fallback")
     except Exception as e:

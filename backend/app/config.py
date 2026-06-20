@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     # Email via Resend
     resend_api_key: str = ""
     email_from: str = "ClipForge <noreply@getclipforge.online>"
+    # Gemini Flash (free tier — AI product extraction from transcripts)
+    gemini_api_key: str = ""
     # Admin
     admin_secret: str = "change-me-in-prod"
 

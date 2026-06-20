@@ -13,3 +13,5 @@ aiofiles==24.1.0
 boto3
 # faster-whisper = openai-whisper replacement: 4x less RAM, 4x faster, no torch needed
 faster-whisper>=0.10.0
+# Gemini Flash free tier — intelligent product extraction from transcripts
+google-generativeai>=0.7.0
