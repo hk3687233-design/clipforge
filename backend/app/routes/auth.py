@@ -223,6 +223,7 @@ def auth_set_password(
 
     user.password_hash = pwd_ctx.hash(req.password.strip())
     db.commit()
+    db.refresh(user)
 
     token = create_token(user.id, user.email, user.plan, user.is_admin)
     return {

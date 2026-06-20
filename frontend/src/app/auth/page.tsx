@@ -102,7 +102,12 @@ export default function AuthPage() {
       await setPassword(newPass);
       router.replace("/tool");
     } catch (e: any) {
-      setError(e?.response?.data?.detail || "Failed to set password. Try again.");
+      const detail = e?.response?.data?.detail;
+      const status = e?.response?.status;
+      if (detail) setError(typeof detail === "string" ? detail : JSON.stringify(detail));
+      else if (status) setError(`Server error ${status} — please try again.`);
+      else if (e?.message) setError(e.message);
+      else setError("Failed to set password. Try again.");
     } finally { setBusy(false); }
   };
 
