@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { getJob, getClipDownloadUrl, getZipDownloadUrl, Job } from "@/lib/api";
 import {
   Download, CheckCircle2, Loader2, AlertCircle,
-  Package, Sparkles, Film, ExternalLink, Lock, Zap, ShoppingCart
+  Package, Sparkles, Film, Lock, Zap, ChevronDown
 } from "lucide-react";
 
 const LEMON_URL = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#";
@@ -57,13 +57,19 @@ const QUALITIES: { key: Quality; label: string }[] = [
 export default function JobPoller({
   jobId, onReset, plan = "pro",
 }: { jobId: string; onReset: () => void; plan?: "free" | "pro" }) {
-  const [job, setJob]         = useState<Job | null>(null);
-  const [elapsed, setElapsed] = useState(0);
-  const [quality, setQuality] = useState<Quality>("1080p");
+  const [job, setJob]             = useState<Job | null>(null);
+  const [elapsed, setElapsed]     = useState(0);
+  const [openDrop, setOpenDrop]   = useState<number | "zip" | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setElapsed(s => s + 1), 1000);
     return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    const close = () => setOpenDrop(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
   }, []);
 
   useEffect(() => {
@@ -189,13 +195,28 @@ export default function JobPoller({
             </div>
 
             {plan === "pro" ? (
-              <a
-                href={getZipDownloadUrl(jobId, quality)}
-                className="flex items-center gap-2 bg-white/[0.06] hover:bg-white/10 border border-white/10 hover:border-white/20 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-all shrink-0"
-              >
-                <Package size={13} />
-                <span>ZIP ({quality === "source" ? "Source" : quality.toUpperCase()})</span>
-              </a>
+              <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
+                <button
+                  onClick={() => setOpenDrop(openDrop === "zip" ? null : "zip")}
+                  className="flex items-center gap-2 bg-white/[0.06] hover:bg-white/10 border border-white/10 hover:border-white/20 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-all"
+                >
+                  <Package size={13} />
+                  <span>Download ZIP</span>
+                  <ChevronDown size={11} className={`transition-transform duration-150 ${openDrop === "zip" ? "rotate-180" : ""}`} />
+                </button>
+                {openDrop === "zip" && (
+                  <div className="absolute right-0 top-full mt-1.5 bg-[#141414] border border-white/10 rounded-xl p-1 z-50 min-w-[130px] shadow-2xl">
+                    {QUALITIES.map(q => (
+                      <a key={q.key} href={getZipDownloadUrl(jobId, q.key)} download
+                        onClick={() => setOpenDrop(null)}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-white/6 text-white/55 hover:text-white/90 text-xs transition-colors">
+                        <Download size={10} />
+                        {q.label}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : (
               <a href={LEMON_URL}
                 className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shrink-0">
@@ -203,25 +224,6 @@ export default function JobPoller({
               </a>
             )}
           </div>
-
-          {/* Quality selector */}
-          {plan === "pro" && (
-            <div className="flex items-center gap-1.5 p-1 bg-white/[0.03] border border-white/8 rounded-xl">
-              {QUALITIES.map(q => (
-                <button
-                  key={q.key}
-                  onClick={() => setQuality(q.key)}
-                  className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-all ${
-                    quality === q.key
-                      ? "bg-brand-600 text-white"
-                      : "text-white/35 hover:text-white/65 hover:bg-white/5"
-                  }`}
-                >
-                  {q.label}
-                </button>
-              ))}
-            </div>
-          )}
 
           {/* Clip cards */}
           <div className="space-y-1.5">
@@ -282,35 +284,31 @@ export default function JobPoller({
                           className="flex items-center gap-1.5 text-brand-400/70 border border-brand-500/20 bg-brand-500/8 hover:bg-brand-500/15 text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-all">
                           <Lock size={10} /> Pro
                         </a>
-                      ) : (
-                        <>
-                          {p.affiliate_url && (
-                            <a
-                              href={p.affiliate_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              title="Buy this product"
-                              className="flex items-center gap-1.5 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 text-orange-400 text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-all"
-                            >
-                              <ShoppingCart size={11} />
-                              <span className="hidden sm:inline">Buy</span>
-                            </a>
+                      ) : (p.clip_filename || p.clip_url) && !isError ? (
+                        <div className="relative" onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={() => setOpenDrop(openDrop === i ? null : i)}
+                            className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 active:bg-brand-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all"
+                          >
+                            <Download size={11} />
+                            <span>Save</span>
+                            <ChevronDown size={9} className={`transition-transform duration-150 ${openDrop === i ? "rotate-180" : ""}`} />
+                          </button>
+                          {openDrop === i && (
+                            <div className="absolute right-0 bottom-full mb-1.5 bg-[#141414] border border-white/10 rounded-xl p-1 z-50 min-w-[110px] shadow-2xl">
+                              {QUALITIES.map(q => (
+                                <a key={q.key}
+                                  href={p.clip_filename ? getClipDownloadUrl(jobId, p.clip_filename, q.key) : (p.clip_url ?? "#")}
+                                  download
+                                  onClick={() => setOpenDrop(null)}
+                                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/6 text-white/55 hover:text-white/90 text-xs transition-colors">
+                                  {q.label}
+                                </a>
+                              ))}
+                            </div>
                           )}
-                          {(p.clip_url || p.clip_filename) && !isError && (
-                            <a
-                              href={p.clip_filename
-                                ? getClipDownloadUrl(jobId, p.clip_filename, quality)
-                                : (p.clip_url ?? "#")}
-                              download
-                              title={`Download ${quality === "source" ? (rl || "source") : quality} MP4`}
-                              className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 active:bg-brand-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all"
-                            >
-                              <Download size={11} />
-                              <span>{quality === "source" ? (rl || "Save") : quality}</span>
-                            </a>
-                          )}
-                        </>
-                      )}
+                        </div>
+                      ) : null}
                     </div>
 
                   </div>

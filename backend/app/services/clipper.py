@@ -30,12 +30,13 @@ def _get_video_resolution(video_path: str) -> str:
         return "unknown"
 
 
-# Quality presets for on-demand transcoding
-QUALITY_MAP: Dict[str, tuple] = {
-    "480p":  (854,  480),
-    "720p":  (1280, 720),
-    "1080p": (1920, 1080),
-    "2k":    (2560, 1440),
+# Quality presets — target heights for on-demand transcoding
+# scale=-2:'min(h,ih)' downscales when source is taller, no upscaling
+QUALITY_MAP: Dict[str, int] = {
+    "480p":  480,
+    "720p":  720,
+    "1080p": 1080,
+    "2k":    1440,
 }
 
 # How many seconds to trim from clip start to skip transition overlap.
@@ -101,23 +102,25 @@ def transcode_clip(src_path: str, quality: str) -> str:
     if quality not in QUALITY_MAP:
         return src_path  # unknown quality → serve original
 
-    w, h = QUALITY_MAP[quality]
+    h = QUALITY_MAP[quality]
     base, ext = os.path.splitext(src_path)
     out_path = f"{base}_{quality}{ext}"
 
     if os.path.exists(out_path):
         return out_path  # already cached
 
+    # scale=-2:'min(h,ih)': auto width (div-by-2), downscale only (no upscale)
+    # Single-quoted expression protects the comma from FFmpeg's filter parser
     cmd = [
         "ffmpeg",
         "-i", _p(src_path),
-        "-vf", f"scale='min({w},iw)':'min({h},ih)':force_original_aspect_ratio=decrease,setsar=1",
+        "-vf", f"scale=-2:'min({h},ih)',setsar=1",
         "-c:v", "libx264",
-        "-crf", "18",
+        "-crf", "20",
         "-preset", "fast",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
-        "-b:a", "192k",
+        "-b:a", "128k",
         "-movflags", "+faststart",
         _p(out_path),
         "-y", "-loglevel", "error",
