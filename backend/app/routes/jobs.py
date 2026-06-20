@@ -2,9 +2,11 @@ import uuid
 import os
 import zipfile
 from datetime import datetime, date
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Header
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Header, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from typing import Optional
 
 from app.database import get_db, Job, JobStatus, License, User
@@ -17,7 +19,8 @@ from app.config import settings
 def _p(path: str) -> str:
     return path.replace("\\", "/")
 
-router = APIRouter(prefix="/jobs", tags=["jobs"])
+router  = APIRouter(prefix="/jobs", tags=["jobs"])
+limiter = Limiter(key_func=get_remote_address)
 
 FREE_DAILY_LIMIT  = 3
 FREE_CLIPS_LIMIT  = 5
@@ -62,7 +65,9 @@ def _get_auth(
 # ── Job creation ────────────────────────────────────────────────────────────
 
 @router.post("/", status_code=201)
+@limiter.limit("12/minute")
 async def create_job(
+    request: Request,
     background_tasks: BackgroundTasks,
     url:  Optional[str]        = Form(None),
     file: Optional[UploadFile] = File(None),

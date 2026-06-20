@@ -165,9 +165,14 @@ def activate_key(
 
     lic = db.query(License).filter(License.key == key).first()
     if not lic:
-        raise HTTPException(404, "License key not found")
+        raise HTTPException(404, "License key not found — check and try again")
     if not lic.is_valid:
-        raise HTTPException(403, "License key is disabled")
+        raise HTTPException(403, "This license key has been disabled")
+
+    # Prevent key sharing — one key per account only
+    existing = db.query(User).filter(User.license_key == key, User.id != user.id).first()
+    if existing:
+        raise HTTPException(403, "This key is already activated on another account")
 
     # Link key to user and upgrade plan
     user.license_key = key

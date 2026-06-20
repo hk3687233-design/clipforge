@@ -4,50 +4,60 @@ import { useAuth } from "@/contexts/AuthContext";
 import axios from "axios";
 import {
   Scissors, Users, Key, Send, Loader2, RefreshCw, LogOut,
-  Search, Crown, ShieldOff, User,
+  Search, Crown, ShieldOff, User, Copy, CheckCircle2,
 } from "lucide-react";
-
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const ADMIN_KEY = "clipforge_admin_secret";
 
 interface UserRow {
   id: string; email: string; name?: string; plan: string;
-  google_linked: boolean; license_key?: string; is_admin: boolean;
+  license_key?: string; is_admin: boolean;
   daily_jobs_used: number; daily_jobs_date?: string; created_at?: string;
 }
+interface LicenseRow {
+  key: string; email?: string; plan: string; is_valid: boolean;
+  jobs_used: number; activated_at?: string; created_at?: string;
+}
 interface Stats {
-  licenses: { total: number; pro: number; free: number; active: number };
+  licenses: { total: number; pro: number; free: number };
   jobs: { total: number; done: number; failed: number };
 }
 
-type Tab = "all" | "free" | "pro";
+type UserTab = "all" | "free" | "pro";
 
 export default function AdminPage() {
   const { user } = useAuth();
 
-  const [secret, setSecret]     = useState("");
-  const [authed, setAuthed]     = useState(false);
-  const [users,  setUsers]      = useState<UserRow[]>([]);
-  const [stats,  setStats]      = useState<Stats | null>(null);
-  const [loading, setLoading]   = useState(false);
-  const [error,  setError]      = useState("");
-  const [search, setSearch]     = useState("");
-  const [tab,    setTab]        = useState<Tab>("all");
-  const [genEmail, setGenEmail] = useState("");
-  const [genBusy,  setGenBusy]  = useState(false);
-  const [genMsg,   setGenMsg]   = useState("");
-  const [planBusy, setPlanBusy] = useState<string | null>(null);
+  const [secret, setSecret]       = useState("");
+  const [authed, setAuthed]       = useState(false);
+  const [users,  setUsers]        = useState<UserRow[]>([]);
+  const [licenses, setLicenses]   = useState<LicenseRow[]>([]);
+  const [stats,  setStats]        = useState<Stats | null>(null);
+  const [loading, setLoading]     = useState(false);
+  const [error,  setError]        = useState("");
+  const [search, setSearch]       = useState("");
+  const [userTab, setUserTab]     = useState<UserTab>("all");
+  const [genEmail, setGenEmail]   = useState("");
+  const [genBusy,  setGenBusy]    = useState(false);
+  const [genMsg,   setGenMsg]     = useState("");
+  const [planBusy, setPlanBusy]   = useState<string | null>(null);
+  const [newKey,   setNewKey]     = useState("");   // shows generated key toast
+  const [copied,   setCopied]     = useState(false);
 
   const load = useCallback(async (sec: string) => {
     setLoading(true); setError("");
     try {
       const hdrs = { "X-Admin-Secret": sec };
-      const [u, s] = await Promise.all([
-        axios.get(`${API_BASE}/api/admin/users`, { headers: hdrs }),
-        axios.get(`${API_BASE}/api/admin/stats`, { headers: hdrs }),
+      const [u, s, l] = await Promise.all([
+        axios.get(`${API_BASE}/api/admin/users`,    { headers: hdrs }),
+        axios.get(`${API_BASE}/api/admin/stats`,    { headers: hdrs }),
+        axios.get(`${API_BASE}/api/admin/licenses`, { headers: hdrs }),
       ]);
-      setUsers(u.data.items); setStats(s.data); setAuthed(true);
+      setUsers(u.data.items);
+      setStats(s.data);
+      setLicenses(l.data.items);
+      setAuthed(true);
       localStorage.setItem(ADMIN_KEY, sec);
     } catch (e: any) {
       setError(e?.response?.data?.detail || "Invalid admin secret");
@@ -66,13 +76,12 @@ export default function AdminPage() {
     e.preventDefault();
     if (!genEmail.trim()) return;
     setGenBusy(true); setGenMsg("");
-    const hdrs = { "X-Admin-Secret": secret };
     try {
       const res = await axios.post(
         `${API_BASE}/api/admin/licenses/generate?plan=pro&email=${encodeURIComponent(genEmail.trim())}`,
-        {}, { headers: hdrs }
+        {}, { headers: { "X-Admin-Secret": secret } }
       );
-      setGenMsg(`✓ Key sent: ${res.data.key}`);
+      setGenMsg(`✓ Key sent to ${genEmail.trim()}: ${res.data.key}`);
       setGenEmail(""); load(secret);
     } catch (e: any) {
       setGenMsg(`✗ ${e?.response?.data?.detail || "Failed"}`);
@@ -83,18 +92,33 @@ export default function AdminPage() {
     const newPlan = u.plan === "pro" ? "free" : "pro";
     setPlanBusy(u.id);
     try {
-      await axios.patch(
+      const res = await axios.patch(
         `${API_BASE}/api/admin/users/${u.id}/set-plan?plan=${newPlan}`,
         {}, { headers: { "X-Admin-Secret": secret } }
       );
-      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, plan: newPlan } : x));
+      setUsers(prev => prev.map(x => x.id === u.id
+        ? { ...x, plan: newPlan, license_key: res.data.key || x.license_key }
+        : x
+      ));
+      if (res.data.key) {
+        setNewKey(res.data.key);
+        // Reload licenses to show the new one
+        const l = await axios.get(`${API_BASE}/api/admin/licenses`, { headers: { "X-Admin-Secret": secret } });
+        setLicenses(l.data.items);
+      }
     } catch {} finally { setPlanBusy(null); }
   };
 
+  const copyKey = (key: string) => {
+    navigator.clipboard.writeText(key);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const today = new Date().toISOString().slice(0, 10);
-  const filtered = users.filter(u => {
-    if (tab === "free" && u.plan !== "free") return false;
-    if (tab === "pro"  && u.plan !== "pro")  return false;
+  const filteredUsers = users.filter(u => {
+    if (userTab === "free" && u.plan !== "free") return false;
+    if (userTab === "pro"  && u.plan !== "pro")  return false;
     if (search) {
       const s = search.toLowerCase();
       return u.email.toLowerCase().includes(s) || (u.name || "").toLowerCase().includes(s);
@@ -102,7 +126,7 @@ export default function AdminPage() {
     return true;
   });
 
-  // Admin secret prompt
+  // ── Admin secret prompt ────────────────────────────────────────────────────
   if (!authed) return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm glass border border-white/10 rounded-3xl p-7 space-y-5">
@@ -113,7 +137,6 @@ export default function AdminPage() {
           <span className="font-bold text-lg">Admin Panel</span>
         </div>
 
-        {/* Logged-in user display (only if available) */}
         {user && (
           <div className="bg-white/[0.03] border border-white/8 rounded-xl px-4 py-2.5 flex items-center gap-2.5">
             {user.avatar_url
@@ -130,7 +153,7 @@ export default function AdminPage() {
         )}
 
         <form onSubmit={handleLogin} className="space-y-3">
-          <input type="password" placeholder="Admin secret / password"
+          <input type="password" placeholder="Admin password / secret"
             value={secret} onChange={e => setSecret(e.target.value)}
             className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-500/50 transition-all"
             autoFocus />
@@ -172,13 +195,31 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Stats (no revenue) */}
+      {/* Generated key notification */}
+      {newKey && (
+        <div className="relative z-10 glass border border-emerald-500/30 bg-emerald-500/5 rounded-2xl p-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-emerald-400 text-xs font-semibold mb-1">Pro key generated & linked</p>
+            <p className="text-white/60 text-xs font-mono">{newKey}</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={() => copyKey(newKey)}
+              className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white transition-colors">
+              {copied ? <CheckCircle2 size={13} className="text-emerald-400" /> : <Copy size={13} />}
+              {copied ? "Copied" : "Copy"}
+            </button>
+            <button onClick={() => setNewKey("")} className="text-white/20 hover:text-white/50 text-xs transition-colors">✕</button>
+          </div>
+        </div>
+      )}
+
+      {/* Stats */}
       {stats && (
         <div className="relative z-10 grid grid-cols-3 gap-3">
           {[
-            { label: "Pro Users",   val: stats.licenses.pro,   color: "text-brand-400" },
-            { label: "Free Users",  val: stats.licenses.free,  color: "text-white/50" },
-            { label: "Total Jobs",  val: stats.jobs.total,     color: "text-emerald-400" },
+            { label: "Pro Users",  val: stats.licenses.pro,   color: "text-brand-400" },
+            { label: "Free Users", val: stats.licenses.free,  color: "text-white/50" },
+            { label: "Total Jobs", val: stats.jobs.total,     color: "text-emerald-400" },
           ].map(s => (
             <div key={s.label} className="glass border border-white/8 rounded-2xl p-4">
               <p className="text-white/30 text-[11px] mb-1">{s.label}</p>
@@ -195,7 +236,7 @@ export default function AdminPage() {
           <h2 className="font-semibold text-white/90 text-sm">Generate Pro Key for Customer</h2>
         </div>
         <p className="text-white/35 text-xs leading-relaxed">
-          For offline / WhatsApp payments — key is generated, emailed, and auto-linked to their account if they're already signed up.
+          Offline / WhatsApp payment — key is generated, emailed to customer, and auto-linked to their account if they're signed up.
         </p>
         <form onSubmit={handleGenerate} className="flex gap-2">
           <input type="email" placeholder="customer@email.com" value={genEmail}
@@ -207,7 +248,7 @@ export default function AdminPage() {
           </button>
         </form>
         {genMsg && (
-          <p className={`text-xs font-medium ${genMsg.startsWith("✓") ? "text-emerald-400" : "text-red-400"}`}>
+          <p className={`text-xs font-medium break-all ${genMsg.startsWith("✓") ? "text-emerald-400" : "text-red-400"}`}>
             {genMsg}
           </p>
         )}
@@ -221,12 +262,11 @@ export default function AdminPage() {
               <Users size={14} className="text-white/40" />
               <h2 className="font-semibold text-white/90 text-sm">Users ({users.length})</h2>
             </div>
-            {/* Plan tabs */}
             <div className="flex bg-white/[0.04] rounded-lg p-0.5 gap-0.5">
-              {(["all", "free", "pro"] as Tab[]).map(t => (
-                <button key={t} onClick={() => setTab(t)}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all capitalize ${
-                    tab === t ? "bg-brand-600 text-white" : "text-white/30 hover:text-white/60"
+              {(["all", "free", "pro"] as UserTab[]).map(t => (
+                <button key={t} onClick={() => setUserTab(t)}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                    userTab === t ? "bg-brand-600 text-white" : "text-white/30 hover:text-white/60"
                   }`}>
                   {t === "all" ? `All (${users.length})` : t === "free" ? `Free (${users.filter(u => u.plan === "free").length})` : `Pro (${users.filter(u => u.plan === "pro").length})`}
                 </button>
@@ -244,26 +284,21 @@ export default function AdminPage() {
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-white/5">
-                {["User", "Plan", "License Key", "Google", "Jobs Today", "Joined"].map(h => (
+                {["User", "Plan", "License Key", "Jobs Today", "Joined"].map(h => (
                   <th key={h} className="px-4 py-3 text-white/25 text-xs font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map(u => (
+              {filteredUsers.map(u => (
                 <tr key={u.id} className="border-b border-white/4 hover:bg-white/[0.025] transition-colors">
-                  {/* User: name on top, email below */}
                   <td className="px-4 py-3 min-w-[160px]">
                     {u.name
-                      ? <>
-                          <div className="text-white/85 text-xs font-semibold">{u.name}</div>
-                          <div className="text-white/35 text-[11px]">{u.email}</div>
-                        </>
+                      ? <><div className="text-white/85 text-xs font-semibold">{u.name}</div>
+                          <div className="text-white/35 text-[11px]">{u.email}</div></>
                       : <div className="text-white/70 text-xs">{u.email}</div>
                     }
                   </td>
-
-                  {/* Plan + toggle */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
                       <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
@@ -271,9 +306,7 @@ export default function AdminPage() {
                           ? "bg-brand-500/15 text-brand-400 border border-brand-500/25"
                           : "bg-white/5 text-white/30 border border-white/8"
                       }`}>{u.plan.toUpperCase()}</span>
-                      <button
-                        onClick={() => handleTogglePlan(u)}
-                        disabled={planBusy === u.id}
+                      <button onClick={() => handleTogglePlan(u)} disabled={planBusy === u.id}
                         title={`Switch to ${u.plan === "pro" ? "free" : "pro"}`}
                         className="text-white/20 hover:text-white/70 transition-colors disabled:opacity-30">
                         {planBusy === u.id
@@ -283,8 +316,6 @@ export default function AdminPage() {
                       </button>
                     </div>
                   </td>
-
-                  {/* License key (truncated) */}
                   <td className="px-4 py-3 text-[11px] font-mono">
                     {u.license_key
                       ? <span title={u.license_key} className="text-white/40 cursor-help">
@@ -293,8 +324,6 @@ export default function AdminPage() {
                       : <span className="text-white/15">—</span>
                     }
                   </td>
-
-                  <td className="px-4 py-3 text-xs text-white/40">{u.google_linked ? "✓" : "—"}</td>
                   <td className="px-4 py-3 text-xs text-white/40">
                     {u.daily_jobs_date === today ? u.daily_jobs_used : 0}/3
                   </td>
@@ -303,8 +332,65 @@ export default function AdminPage() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-white/20 text-xs">No users found</td></tr>
+              {filteredUsers.length === 0 && (
+                <tr><td colSpan={5} className="px-4 py-10 text-center text-white/20 text-xs">No users found</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* License Keys table */}
+      <div className="relative z-10 glass border border-white/8 rounded-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-white/8 flex items-center gap-2">
+          <Key size={14} className="text-white/40" />
+          <h2 className="font-semibold text-white/90 text-sm">License Keys ({licenses.length})</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-white/5">
+                {["Key", "Email", "Plan", "Jobs Used", "Status", "Created"].map(h => (
+                  <th key={h} className="px-4 py-3 text-white/25 text-xs font-semibold whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {licenses.map(l => (
+                <tr key={l.key} className="border-b border-white/4 hover:bg-white/[0.025] transition-colors">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span title={l.key} className="text-white/50 text-[11px] font-mono cursor-help">
+                        {l.key.slice(0, 20)}…
+                      </span>
+                      <button onClick={() => copyKey(l.key)} className="text-white/20 hover:text-white/60 transition-colors">
+                        <Copy size={10} />
+                      </button>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-white/50">{l.email || <span className="text-white/15">—</span>}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                      l.plan === "pro"
+                        ? "bg-brand-500/15 text-brand-400 border border-brand-500/25"
+                        : "bg-white/5 text-white/30 border border-white/8"
+                    }`}>{l.plan.toUpperCase()}</span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-white/40">{l.jobs_used || 0}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                      l.is_valid
+                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                        : "bg-red-500/10 text-red-400 border border-red-500/20"
+                    }`}>{l.is_valid ? "Active" : "Disabled"}</span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-white/30 whitespace-nowrap">
+                    {l.created_at ? new Date(l.created_at).toLocaleDateString() : "—"}
+                  </td>
+                </tr>
+              ))}
+              {licenses.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-10 text-center text-white/20 text-xs">No keys generated yet</td></tr>
               )}
             </tbody>
           </table>

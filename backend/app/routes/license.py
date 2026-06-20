@@ -414,15 +414,30 @@ def admin_set_user_plan(
     db: Session = Depends(get_db),
     _: None = Depends(_check_admin),
 ):
-    """Switch a user's plan between pro and free."""
+    """Switch a user's plan. Upgrading to pro auto-generates + links a license key."""
     if plan not in ("pro", "free"):
         raise HTTPException(400, "Plan must be 'pro' or 'free'")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "User not found")
+
+    generated_key = None
+    if plan == "pro" and user.plan != "pro":
+        # Auto-generate a license key and link to this user
+        generated_key = _generate_key("pro")
+        lic = License(
+            key=generated_key,
+            email=user.email,
+            plan="pro",
+            is_valid=True,
+            activated_at=datetime.utcnow(),
+        )
+        db.add(lic)
+        user.license_key = generated_key
+
     user.plan = plan
     db.commit()
-    return {"updated": True, "email": user.email, "plan": plan}
+    return {"updated": True, "email": user.email, "plan": plan, "key": generated_key}
 
 
 @router.patch("/api/admin/licenses/{key}/enable")
