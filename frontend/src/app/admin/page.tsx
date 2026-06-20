@@ -113,19 +113,21 @@ export default function AdminPage() {
           <span className="font-bold text-lg">Admin Panel</span>
         </div>
 
-        {/* Logged-in user display */}
-        <div className="bg-white/[0.03] border border-white/8 rounded-xl px-4 py-2.5 flex items-center gap-2.5">
-          {user.avatar_url
-            ? <img src={user.avatar_url} alt="" className="w-6 h-6 rounded-full shrink-0" />
-            : <div className="w-6 h-6 rounded-full bg-brand-600/30 flex items-center justify-center shrink-0">
-                <User size={12} className="text-brand-400" />
-              </div>
-          }
-          <div>
-            {user.name && <p className="text-white/70 text-xs font-semibold leading-none">{user.name}</p>}
-            <p className="text-white/35 text-[11px]">{user.email}</p>
+        {/* Logged-in user display (only if available) */}
+        {user && (
+          <div className="bg-white/[0.03] border border-white/8 rounded-xl px-4 py-2.5 flex items-center gap-2.5">
+            {user.avatar_url
+              ? <img src={user.avatar_url} alt="" className="w-6 h-6 rounded-full shrink-0" />
+              : <div className="w-6 h-6 rounded-full bg-brand-600/30 flex items-center justify-center shrink-0">
+                  <User size={12} className="text-brand-400" />
+                </div>
+            }
+            <div>
+              {user.name && <p className="text-white/70 text-xs font-semibold leading-none">{user.name}</p>}
+              <p className="text-white/35 text-[11px]">{user.email}</p>
+            </div>
           </div>
-        </div>
+        )}
 
         <form onSubmit={handleLogin} className="space-y-3">
           <input type="password" placeholder="Admin secret / password"
