@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Uploader from "@/components/Uploader";
 import JobPoller from "@/components/JobPoller";
 import { useAuth } from "@/contexts/AuthContext";
-import { Scissors, Zap, Lock, Loader2, User } from "lucide-react";
+import { Scissors, Zap, Lock, Loader2, User, Key } from "lucide-react";
 
 const LEMON_URL = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#";
 
@@ -58,12 +58,6 @@ export default function ToolPage() {
                 <Zap size={12} /><span className="hidden sm:inline">Upgrade to Pro — </span>$29
               </a>
             )}
-            {user.is_admin && (
-              <a href="/admin"
-                className="text-brand-400/70 hover:text-brand-400 text-xs transition-colors border border-brand-500/20 px-3 py-1.5 rounded-lg hover:bg-brand-500/10">
-                Admin
-              </a>
-            )}
             <div className="flex items-center gap-2">
               {user.avatar_url
                 ? <img src={user.avatar_url} alt="" className="w-7 h-7 rounded-full" />
@@ -87,32 +81,21 @@ export default function ToolPage() {
             Paste a YouTube, TikTok, or Instagram link. AI detects each product and exports separate high-quality clips.
           </p>
           {plan === "free" && (
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-yellow-400 text-xs font-medium">
-              <Lock size={12} /> Free plan: 3 exports/day · max 10 min · 5 clips ·{" "}
-              <a href={LEMON_URL} className="underline underline-offset-2 font-bold">Upgrade for unlimited</a>
+            <div className="flex flex-col items-center gap-2">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-yellow-400 text-xs font-medium">
+                <Lock size={12} /> Free plan: 3 exports/day · max 10 min · 5 clips ·{" "}
+                <a href={LEMON_URL} className="underline underline-offset-2 font-bold">Upgrade for unlimited</a>
+              </div>
+              <a href="/auth" className="flex items-center gap-1.5 text-white/25 hover:text-brand-400 text-xs transition-colors">
+                <Key size={11} /> Have a license key? Activate it →
+              </a>
             </div>
           )}
         </div>
 
         {/* Tool */}
         <div className="w-full max-w-2xl">
-          {plan === "free" ? (
-            <div className="glass border border-white/10 rounded-3xl p-10 text-center space-y-5">
-              <div className="w-14 h-14 rounded-2xl bg-brand-600/20 border border-brand-500/30 flex items-center justify-center mx-auto">
-                <Zap size={24} className="text-brand-400" />
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-xl font-bold text-white">Free Plan — Coming Soon</h2>
-                <p className="text-white/40 text-sm max-w-sm mx-auto">
-                  The free tier is not available yet. Upgrade to Pro to get full access right now.
-                </p>
-              </div>
-              <a href={LEMON_URL}
-                className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white font-bold px-6 py-3 rounded-2xl transition-all glow-button text-sm">
-                <Zap size={14} /> Get Pro — $29 Lifetime
-              </a>
-            </div>
-          ) : !jobId
+          {!jobId
             ? <Uploader onJobCreated={setJobId} />
             : <JobPoller jobId={jobId} onReset={() => setJobId(null)} plan={plan} />
           }

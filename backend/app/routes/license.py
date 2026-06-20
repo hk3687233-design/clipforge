@@ -330,8 +330,16 @@ def admin_generate_license(
     lic = License(key=key, email=email or None, plan=plan, is_valid=True)
     db.add(lic)
     db.commit()
+
+    # Also link key + upgrade plan to existing user account
     if email:
+        existing_user = db.query(User).filter(User.email == email.strip().lower()).first()
+        if existing_user:
+            existing_user.license_key = key
+            existing_user.plan = plan
+            db.commit()
         send_license_email(email, key, plan)
+
     return {"key": key, "plan": plan, "email": email}
 
 
@@ -391,13 +399,30 @@ def admin_set_user_pro(
     db: Session = Depends(get_db),
     _: None = Depends(_check_admin),
 ):
-    """Manually upgrade a user to pro (for offline payments)."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "User not found")
     user.plan = "pro"
     db.commit()
     return {"upgraded": True, "email": user.email}
+
+
+@router.patch("/api/admin/users/{user_id}/set-plan")
+def admin_set_user_plan(
+    user_id: str,
+    plan: str = "pro",
+    db: Session = Depends(get_db),
+    _: None = Depends(_check_admin),
+):
+    """Switch a user's plan between pro and free."""
+    if plan not in ("pro", "free"):
+        raise HTTPException(400, "Plan must be 'pro' or 'free'")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    user.plan = plan
+    db.commit()
+    return {"updated": True, "email": user.email, "plan": plan}
 
 
 @router.patch("/api/admin/licenses/{key}/enable")
