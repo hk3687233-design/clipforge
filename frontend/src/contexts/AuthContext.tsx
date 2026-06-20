@@ -12,14 +12,17 @@ export interface AuthUser {
   avatar_url?: string;
   plan: "free" | "pro";
   is_admin: boolean;
+  has_password?: boolean;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   loading: boolean;
-  loginWithGoogle: (credential: string) => Promise<void>;
-  loginWithEmail: (email: string) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<boolean>;
+  loginWithEmail: (email: string, password: string) => Promise<void>;
+  signupWithEmail: (firstName: string, lastName: string, email: string, password: string) => Promise<string>;
+  setPassword: (password: string) => Promise<void>;
   activateKey: (key: string) => Promise<string>;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -28,15 +31,14 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser]     = useState<AuthUser | null>(null);
-  const [token, setToken]   = useState<string | null>(null);
+  const [user, setUser]       = useState<AuthUser | null>(null);
+  const [token, setToken]     = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const _saveSession = (tok: string, u: AuthUser) => {
     localStorage.setItem(TOKEN_KEY, tok);
     setToken(tok);
     setUser(u);
-    // Keep legacy keys in sync for backward compat (license endpoints)
     localStorage.setItem("clipforge_plan", u.plan);
   };
 
@@ -60,13 +62,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { refreshUser(); }, []);
 
-  const loginWithGoogle = async (credential: string) => {
+  const loginWithGoogle = async (credential: string): Promise<boolean> => {
     const res = await axios.post(`${API_BASE}/api/auth/google`, { credential });
+    _saveSession(res.data.token, res.data.user as AuthUser);
+    return Boolean(res.data.needs_password);
+  };
+
+  const loginWithEmail = async (email: string, password: string): Promise<void> => {
+    const res = await axios.post(`${API_BASE}/api/auth/login`, { email, password });
     _saveSession(res.data.token, res.data.user as AuthUser);
   };
 
-  const loginWithEmail = async (email: string) => {
-    const res = await axios.post(`${API_BASE}/api/auth/email`, { email });
+  const signupWithEmail = async (
+    firstName: string, lastName: string, email: string, password: string
+  ): Promise<string> => {
+    const res = await axios.post(`${API_BASE}/api/auth/signup`, {
+      first_name: firstName,
+      last_name:  lastName,
+      email,
+      password,
+    });
+    return res.data.message as string;
+  };
+
+  const setPassword = async (password: string): Promise<void> => {
+    const tok = localStorage.getItem(TOKEN_KEY);
+    const res = await axios.post(
+      `${API_BASE}/api/auth/set-password`,
+      { password },
+      { headers: { Authorization: `Bearer ${tok}` } },
+    );
     _saveSession(res.data.token, res.data.user as AuthUser);
   };
 
@@ -90,7 +115,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, loginWithGoogle, loginWithEmail, activateKey, logout, refreshUser }}>
+    <AuthContext.Provider value={{
+      user, token, loading,
+      loginWithGoogle, loginWithEmail, signupWithEmail, setPassword,
+      activateKey, logout, refreshUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );

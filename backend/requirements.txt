@@ -18,3 +18,4 @@ google-generativeai>=0.7.0
 # Auth — JWT tokens + Google OAuth token verification
 PyJWT>=2.8.0
 google-auth>=2.0.0
+passlib[bcrypt]>=1.7.4

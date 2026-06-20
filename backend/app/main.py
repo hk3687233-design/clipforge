@@ -4,11 +4,12 @@ from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from app.database import Base, engine, create_tables
+from app.database import Base, engine, create_tables, run_migrations
 from app.routes import jobs, license, auth
 
-# Create all DB tables on startup
+# Create all DB tables on startup, then add any new columns
 create_tables()
+run_migrations()
 
 # Rate limiter (keyed by IP)
 limiter = Limiter(key_func=get_remote_address)

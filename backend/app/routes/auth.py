@@ -1,9 +1,11 @@
 """
 Auth routes:
-  POST /api/auth/google   — verify Google credential, return JWT
-  POST /api/auth/email    — email-only login/signup (free), return JWT
-  GET  /api/auth/me       — get current user
-  POST /api/auth/activate — link pro license key to user account
+  POST /api/auth/signup        — email+password signup (new users)
+  POST /api/auth/login         — email+password login
+  POST /api/auth/google        — Google OAuth login/signup
+  GET  /api/auth/me            — get current user
+  POST /api/auth/activate      — link pro license key to user account
+  POST /api/auth/set-password  — set/update password (for Google users)
 """
 import re
 import uuid
@@ -11,6 +13,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
+from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -21,53 +24,62 @@ from app.services.auth_service import create_token, get_current_user
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 KEY_PATTERN = re.compile(r"^CF-(PRO|FREE)-[A-Z0-9]{6}-[A-Z0-9]{6}-[A-Z0-9]{6}$")
+pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────
 
-class GoogleAuthRequest(BaseModel):
-    credential: str      # Google ID token (JWT from Google)
-
-class EmailAuthRequest(BaseModel):
+class SignupRequest(BaseModel):
+    first_name: str
+    last_name: str
     email: str
+    password: str
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class GoogleAuthRequest(BaseModel):
+    credential: str
 
 class ActivateKeyRequest(BaseModel):
     key: str
 
+class SetPasswordRequest(BaseModel):
+    password: str
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
-def _user_response(user: User, db: Session) -> dict:
-    token = create_token(user.id, user.email, user.plan, user.is_admin)
+def _user_dict(user: User) -> dict:
     return {
-        "token": token,
-        "user": {
-            "id":         user.id,
-            "email":      user.email,
-            "name":       user.name,
-            "avatar_url": user.avatar_url,
-            "plan":       user.plan,
-            "is_admin":   user.is_admin,
-        },
+        "id":           user.id,
+        "email":        user.email,
+        "name":         user.name,
+        "avatar_url":   user.avatar_url,
+        "plan":         user.plan,
+        "is_admin":     user.is_admin,
+        "has_password": bool(user.password_hash),
     }
 
 
-def _find_or_create_user(
+def _user_response(user: User, db: Session) -> dict:
+    token = create_token(user.id, user.email, user.plan, user.is_admin)
+    return {"token": token, "user": _user_dict(user)}
+
+
+def _find_or_create_google_user(
     db: Session,
     email: str,
-    google_id: Optional[str] = None,
+    google_id: str,
     name: Optional[str] = None,
     avatar_url: Optional[str] = None,
 ) -> User:
-    # Try by Google ID first, then by email
-    user = None
-    if google_id:
-        user = db.query(User).filter(User.google_id == google_id).first()
+    user = db.query(User).filter(User.google_id == google_id).first()
     if not user:
         user = db.query(User).filter(User.email == email).first()
 
     if not user:
-        # New user
         is_admin = bool(settings.admin_email and email == settings.admin_email.lower())
         user = User(
             id=str(uuid.uuid4()),
@@ -80,12 +92,11 @@ def _find_or_create_user(
         )
         db.add(user)
     else:
-        # Update profile fields if provided
-        if google_id:
+        if google_id and not user.google_id:
             user.google_id = google_id
-        if name:
+        if name and not user.name:
             user.name = name
-        if avatar_url:
+        if avatar_url and not user.avatar_url:
             user.avatar_url = avatar_url
         if not user.is_admin and settings.admin_email and email == settings.admin_email.lower():
             user.is_admin = True
@@ -96,6 +107,62 @@ def _find_or_create_user(
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────
+
+@router.post("/signup", status_code=201)
+def auth_signup(req: SignupRequest, db: Session = Depends(get_db)):
+    """Create new account with email + password."""
+    email = req.email.strip().lower()
+    if not email or "@" not in email or "." not in email:
+        raise HTTPException(400, "Invalid email address")
+    if len(req.password.strip()) < 6:
+        raise HTTPException(400, "Password must be at least 6 characters")
+    if not req.first_name.strip():
+        raise HTTPException(400, "First name is required")
+
+    existing = db.query(User).filter(User.email == email).first()
+    if existing:
+        raise HTTPException(409, "An account with this email already exists. Please sign in.")
+
+    first = req.first_name.strip()
+    last  = req.last_name.strip()
+    is_admin = bool(settings.admin_email and email == settings.admin_email.lower())
+
+    user = User(
+        id=str(uuid.uuid4()),
+        email=email,
+        first_name=first,
+        last_name=last,
+        name=f"{first} {last}".strip(),
+        password_hash=pwd_ctx.hash(req.password.strip()),
+        plan="free",
+        is_admin=is_admin,
+    )
+    db.add(user)
+    db.commit()
+    return {"message": "Account created! You can now sign in."}
+
+
+@router.post("/login")
+def auth_login(req: LoginRequest, db: Session = Depends(get_db)):
+    """Login with email + password."""
+    email = req.email.strip().lower()
+    user = db.query(User).filter(User.email == email).first()
+
+    if not user:
+        raise HTTPException(401, "No account found with this email. Please sign up first.")
+
+    if not user.password_hash:
+        raise HTTPException(
+            401,
+            "This account was created with Google Sign-In. "
+            "Please log in with Google, then set a password from the account settings."
+        )
+
+    if not pwd_ctx.verify(req.password, user.password_hash):
+        raise HTTPException(401, "Incorrect password. Please try again.")
+
+    return _user_response(user, db)
+
 
 @router.post("/google")
 def auth_google(req: GoogleAuthRequest, db: Session = Depends(get_db)):
@@ -122,19 +189,10 @@ def auth_google(req: GoogleAuthRequest, db: Session = Depends(get_db)):
     if not email or not google_id:
         raise HTTPException(401, "Google token missing email or sub")
 
-    user = _find_or_create_user(db, email, google_id, name, avatar)
-    return _user_response(user, db)
-
-
-@router.post("/email")
-def auth_email(req: EmailAuthRequest, db: Session = Depends(get_db)):
-    """Email-only signup/login (no password — free plan by default)."""
-    email = req.email.strip().lower()
-    if not email or "@" not in email or "." not in email:
-        raise HTTPException(400, "Invalid email address")
-
-    user = _find_or_create_user(db, email)
-    return _user_response(user, db)
+    user = _find_or_create_google_user(db, email, google_id, name, avatar)
+    resp = _user_response(user, db)
+    resp["needs_password"] = not bool(user.password_hash)
+    return resp
 
 
 @router.get("/me")
@@ -149,6 +207,28 @@ def auth_me(user: User = Depends(get_current_user)):
         "is_admin":         user.is_admin,
         "daily_jobs_used":  user.daily_jobs_used,
         "daily_jobs_date":  user.daily_jobs_date,
+        "has_password":     bool(user.password_hash),
+    }
+
+
+@router.post("/set-password")
+def auth_set_password(
+    req: SetPasswordRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Set or update password. Required for Google-only accounts."""
+    if len(req.password.strip()) < 6:
+        raise HTTPException(400, "Password must be at least 6 characters")
+
+    user.password_hash = pwd_ctx.hash(req.password.strip())
+    db.commit()
+
+    token = create_token(user.id, user.email, user.plan, user.is_admin)
+    return {
+        "token":   token,
+        "message": "Password set! You can now sign in with email & password.",
+        "user":    {**_user_dict(user), "has_password": True},
     }
 
 
@@ -169,12 +249,10 @@ def activate_key(
     if not lic.is_valid:
         raise HTTPException(403, "This license key has been disabled")
 
-    # Prevent key sharing — one key per account only
     existing = db.query(User).filter(User.license_key == key, User.id != user.id).first()
     if existing:
         raise HTTPException(403, "This key is already activated on another account")
 
-    # Link key to user and upgrade plan
     user.license_key = key
     user.plan = lic.plan
     if not lic.activated_at:

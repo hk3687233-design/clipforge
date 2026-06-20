@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, DateTime, JSON, Enum, Boolean, Integer
+from sqlalchemy import create_engine, Column, String, DateTime, JSON, Enum, Boolean, Integer, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -27,7 +27,10 @@ class User(Base):
     email         = Column(String(255), unique=True, index=True, nullable=False)
     google_id     = Column(String(100), unique=True, nullable=True, index=True)
     name          = Column(String(255), nullable=True)
+    first_name    = Column(String(100), nullable=True)
+    last_name     = Column(String(100), nullable=True)
     avatar_url    = Column(String(500), nullable=True)
+    password_hash = Column(String(255), nullable=True)
     plan          = Column(String(20),  default="free")   # free | pro
     license_key   = Column(String(100), nullable=True)    # linked pro key
     is_admin      = Column(Boolean,     default=False)
@@ -75,3 +78,20 @@ def get_db():
 
 def create_tables():
     Base.metadata.create_all(bind=engine)
+
+
+def run_migrations():
+    """Add new columns to existing tables without dropping data."""
+    with engine.connect() as conn:
+        if "postgresql" in str(engine.url):
+            stmts = [
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(100)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100)",
+            ]
+            for stmt in stmts:
+                try:
+                    conn.execute(text(stmt))
+                except Exception:
+                    pass
+            conn.commit()

@@ -19,11 +19,6 @@ interface LicenseRow {
   key: string; email?: string; plan: string; is_valid: boolean;
   jobs_used: number; used_by_user: boolean; activated_at?: string; created_at?: string;
 }
-interface Stats {
-  licenses: { total: number; pro: number; free: number };
-  jobs: { total: number; done: number; failed: number };
-}
-
 type UserTab = "all" | "free" | "pro";
 
 export default function AdminPage() {
@@ -33,7 +28,6 @@ export default function AdminPage() {
   const [authed, setAuthed]       = useState(false);
   const [users,  setUsers]        = useState<UserRow[]>([]);
   const [licenses, setLicenses]   = useState<LicenseRow[]>([]);
-  const [stats,  setStats]        = useState<Stats | null>(null);
   const [loading, setLoading]     = useState(false);
   const [error,  setError]        = useState("");
   const [search, setSearch]       = useState("");
@@ -50,13 +44,11 @@ export default function AdminPage() {
     setLoading(true); setError("");
     try {
       const hdrs = { "X-Admin-Secret": sec };
-      const [u, s, l] = await Promise.all([
+      const [u, l] = await Promise.all([
         axios.get(`${API_BASE}/api/admin/users`,    { headers: hdrs }),
-        axios.get(`${API_BASE}/api/admin/stats`,    { headers: hdrs }),
         axios.get(`${API_BASE}/api/admin/licenses`, { headers: hdrs }),
       ]);
       setUsers(u.data.items);
-      setStats(s.data);
       setLicenses(l.data.items);
       setAuthed(true);
       localStorage.setItem(ADMIN_KEY, sec);
@@ -215,21 +207,18 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Stats */}
-      {stats && (
-        <div className="relative z-10 grid grid-cols-3 gap-3">
-          {[
-            { label: "Pro Users",  val: stats.licenses.pro,   color: "text-brand-400" },
-            { label: "Free Users", val: stats.licenses.free,  color: "text-white/50" },
-            { label: "Total Jobs", val: stats.jobs.total,     color: "text-emerald-400" },
-          ].map(s => (
-            <div key={s.label} className="glass border border-white/8 rounded-2xl p-4">
-              <p className="text-white/30 text-[11px] mb-1">{s.label}</p>
-              <p className={`font-bold text-xl ${s.color}`}>{s.val}</p>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Stats — computed live from users array */}
+      <div className="relative z-10 grid grid-cols-2 gap-3">
+        {[
+          { label: "Pro Users",  val: users.filter(u => u.plan === "pro").length,  color: "text-brand-400" },
+          { label: "Free Users", val: users.filter(u => u.plan === "free").length, color: "text-white/50" },
+        ].map(s => (
+          <div key={s.label} className="glass border border-white/8 rounded-2xl p-4">
+            <p className="text-white/30 text-[11px] mb-1">{s.label}</p>
+            <p className={`font-bold text-xl ${s.color}`}>{s.val}</p>
+          </div>
+        ))}
+      </div>
 
       {/* Generate Key */}
       <div className="relative z-10 glass border border-brand-500/20 rounded-2xl p-5 space-y-3">

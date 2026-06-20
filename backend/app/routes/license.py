@@ -422,7 +422,6 @@ def admin_set_user_plan(
 
     generated_key = None
     if plan == "pro" and user.plan != "pro":
-        # Auto-generate a license key and link to this user
         generated_key = _generate_key("pro")
         lic = License(
             key=generated_key,
@@ -433,6 +432,8 @@ def admin_set_user_plan(
         )
         db.add(lic)
         user.license_key = generated_key
+    elif plan == "free":
+        user.license_key = None
 
     user.plan = plan
     db.commit()
