@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import { Key, Loader2, Zap } from "lucide-react";
-import { activateLicense } from "@/lib/api";
+import { Key, Loader2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Props {
   onActivated: (key: string, plan?: string) => void;
@@ -16,16 +16,22 @@ export default function LicenseGate({ onActivated, inline, freeMode }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
+  const { activateKey } = useAuth();
 
   const handleActivate = async () => {
     if (!key.trim()) return setError("Enter your license key");
     setError("");
     setLoading(true);
     try {
-      const res = await activateLicense(key.trim());
-      onActivated(key.trim(), res.plan || "pro");
+      const msg = await activateKey(key.trim().toUpperCase());
+      onActivated(key.trim(), "pro");
     } catch (e: any) {
-      setError(e.response?.data?.detail || "Invalid license key. Check and try again.");
+      const detail = e?.response?.data?.detail || "";
+      if (e?.response?.status === 401) {
+        setError("Please sign in first at /auth, then activate your key.");
+      } else {
+        setError(detail || "Invalid license key. Check and try again.");
+      }
     } finally {
       setLoading(false);
     }
