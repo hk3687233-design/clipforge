@@ -8,8 +8,13 @@ from typing import Optional
 
 from app.database import get_db, Job, JobStatus, License
 from app.services.downloader import is_supported_url
+from app.services.clipper import transcode_clip, QUALITY_MAP
 from app.worker import process_video_job
 from app.config import settings
+
+
+def _p(path: str) -> str:
+    return path.replace("\\", "/")
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -104,29 +109,34 @@ def get_job(job_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{job_id}/clips/download-all")
-def download_all_clips(job_id: str):
-    """Stream ZIP of all clips — never loads entire file into RAM."""
-    from fastapi.responses import FileResponse as _FileResponse
-    import itertools
-
+def download_all_clips(job_id: str, q: str = "source"):
+    """Stream ZIP of all clips at requested quality. Zero RAM overhead."""
     clips_dir = os.path.join(settings.temp_dir, job_id, "clips")
     if not os.path.exists(clips_dir):
         raise HTTPException(404, "No clips found for this job")
 
-    clips = sorted(f for f in os.listdir(clips_dir) if f.endswith(".mp4"))
+    # Exclude already-cached quality variants from base list
+    quality_suffixes = tuple(f"_{k}.mp4" for k in QUALITY_MAP)
+    clips = sorted(
+        f for f in os.listdir(clips_dir)
+        if f.endswith(".mp4") and not f.endswith(quality_suffixes)
+    )
     if not clips:
         raise HTTPException(404, "No clips available")
 
-    zip_path = os.path.join(settings.temp_dir, job_id, "clips.zip")
+    zip_suffix = f"_{q}" if q in QUALITY_MAP else ""
+    zip_path   = os.path.join(settings.temp_dir, job_id, f"clips{zip_suffix}.zip")
+
     if not os.path.exists(zip_path):
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED) as zf:
             for clip in clips:
-                zf.write(os.path.join(clips_dir, clip), clip)
+                src = os.path.join(clips_dir, clip)
+                if q in QUALITY_MAP:
+                    src = transcode_clip(src, q)   # re-encode + cache
+                zf.write(src, clip)
 
-    zip_name = f"clipforge_{job_id[:8]}.zip"
-
-    # Stream directly from disk — zero RAM overhead regardless of ZIP size
-    return _FileResponse(
+    zip_name = f"clipforge_{job_id[:8]}{zip_suffix}.zip"
+    return FileResponse(
         zip_path,
         media_type="application/zip",
         filename=zip_name,
@@ -135,13 +145,21 @@ def download_all_clips(job_id: str):
 
 
 @router.get("/{job_id}/clips/{filename}")
-def download_clip(job_id: str, filename: str):
+def download_clip(job_id: str, filename: str, q: str = "source"):
+    """Download single clip. Optional ?q=720p|1080p|2k re-encodes on demand."""
     clip_path = os.path.join(settings.temp_dir, job_id, "clips", filename)
     if not os.path.exists(clip_path):
         raise HTTPException(404, "Clip not found")
+
+    if q in QUALITY_MAP:
+        clip_path = transcode_clip(clip_path, q)
+        dl_name = f"{q}_{filename}"
+    else:
+        dl_name = filename
+
     return FileResponse(
         clip_path,
         media_type="video/mp4",
-        filename=filename,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        filename=dl_name,
+        headers={"Content-Disposition": f'attachment; filename="{dl_name}"'},
     )

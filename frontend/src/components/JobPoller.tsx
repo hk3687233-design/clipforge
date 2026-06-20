@@ -46,11 +46,20 @@ function formatTime(sec: number): string {
   return `${m}:${s}`;
 }
 
+type Quality = "720p" | "1080p" | "2k" | "source";
+const QUALITIES: { key: Quality; label: string }[] = [
+  { key: "720p",   label: "720p"   },
+  { key: "1080p",  label: "1080p"  },
+  { key: "2k",     label: "2K"     },
+  { key: "source", label: "Source" },
+];
+
 export default function JobPoller({
   jobId, onReset, plan = "pro",
 }: { jobId: string; onReset: () => void; plan?: "free" | "pro" }) {
-  const [job, setJob]       = useState<Job | null>(null);
+  const [job, setJob]         = useState<Job | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [quality, setQuality] = useState<Quality>("1080p");
 
   useEffect(() => {
     const t = setInterval(() => setElapsed(s => s + 1), 1000);
@@ -181,11 +190,11 @@ export default function JobPoller({
 
             {plan === "pro" ? (
               <a
-                href={getZipDownloadUrl(jobId)}
+                href={getZipDownloadUrl(jobId, quality)}
                 className="flex items-center gap-2 bg-white/[0.06] hover:bg-white/10 border border-white/10 hover:border-white/20 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-all shrink-0"
               >
                 <Package size={13} />
-                <span>Download ZIP</span>
+                <span>ZIP ({quality === "source" ? "Source" : quality.toUpperCase()})</span>
               </a>
             ) : (
               <a href={LEMON_URL}
@@ -194,6 +203,25 @@ export default function JobPoller({
               </a>
             )}
           </div>
+
+          {/* Quality selector */}
+          {plan === "pro" && (
+            <div className="flex items-center gap-1.5 p-1 bg-white/[0.03] border border-white/8 rounded-xl">
+              {QUALITIES.map(q => (
+                <button
+                  key={q.key}
+                  onClick={() => setQuality(q.key)}
+                  className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-all ${
+                    quality === q.key
+                      ? "bg-brand-600 text-white"
+                      : "text-white/35 hover:text-white/65 hover:bg-white/5"
+                  }`}
+                >
+                  {q.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Clip cards */}
           <div className="space-y-1.5">
@@ -270,13 +298,15 @@ export default function JobPoller({
                           )}
                           {(p.clip_url || p.clip_filename) && !isError && (
                             <a
-                              href={p.clip_url ?? getClipDownloadUrl(jobId, p.clip_filename!)}
-                              download={p.clip_filename}
-                              title={rl ? `Download ${rl} MP4` : "Download MP4"}
+                              href={p.clip_filename
+                                ? getClipDownloadUrl(jobId, p.clip_filename, quality)
+                                : (p.clip_url ?? "#")}
+                              download
+                              title={`Download ${quality === "source" ? (rl || "source") : quality} MP4`}
                               className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 active:bg-brand-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all"
                             >
                               <Download size={11} />
-                              <span>{rl || "Save"}</span>
+                              <span>{quality === "source" ? (rl || "Save") : quality}</span>
                             </a>
                           )}
                         </>
