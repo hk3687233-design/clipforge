@@ -9,11 +9,14 @@ Auth routes:
 """
 import re
 import uuid
+import os
+import hmac
+import hashlib
+import base64
 from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
-from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -24,7 +27,22 @@ from app.services.auth_service import create_token, get_current_user
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 KEY_PATTERN = re.compile(r"^CF-(PRO|FREE)-[A-Z0-9]{6}-[A-Z0-9]{6}-[A-Z0-9]{6}$")
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def _hash_password(password: str) -> str:
+    salt = os.urandom(32)
+    key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 200_000)
+    return base64.b64encode(salt + key).decode("utf-8")
+
+
+def _verify_password(password: str, hashed: str) -> bool:
+    try:
+        data = base64.b64decode(hashed.encode("utf-8"))
+        salt, key = data[:32], data[32:]
+        new_key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 200_000)
+        return hmac.compare_digest(key, new_key)
+    except Exception:
+        return False
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────
@@ -133,7 +151,7 @@ def auth_signup(req: SignupRequest, db: Session = Depends(get_db)):
         first_name=first,
         last_name=last,
         name=f"{first} {last}".strip(),
-        password_hash=pwd_ctx.hash(req.password.strip()),
+        password_hash=_hash_password(req.password.strip()),
         plan="free",
         is_admin=is_admin,
     )
@@ -158,7 +176,7 @@ def auth_login(req: LoginRequest, db: Session = Depends(get_db)):
             "Please log in with Google, then set a password from the account settings."
         )
 
-    if not pwd_ctx.verify(req.password, user.password_hash):
+    if not _verify_password(req.password, user.password_hash):
         raise HTTPException(401, "Incorrect password. Please try again.")
 
     return _user_response(user, db)
@@ -221,7 +239,7 @@ def auth_set_password(
     if len(req.password.strip()) < 6:
         raise HTTPException(400, "Password must be at least 6 characters")
 
-    user.password_hash = pwd_ctx.hash(req.password.strip())
+    user.password_hash = _hash_password(req.password.strip())
     db.commit()
     db.refresh(user)
 
