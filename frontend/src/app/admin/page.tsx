@@ -42,7 +42,8 @@ export default function AdminPage() {
   const [genBusy,  setGenBusy]    = useState(false);
   const [genMsg,   setGenMsg]     = useState("");
   const [planBusy, setPlanBusy]   = useState<string | null>(null);
-  const [newKey,   setNewKey]     = useState("");   // shows generated key toast
+  const [planErr,  setPlanErr]    = useState("");
+  const [newKey,   setNewKey]     = useState("");
   const [copied,   setCopied]     = useState(false);
 
   const load = useCallback(async (sec: string) => {
@@ -90,23 +91,24 @@ export default function AdminPage() {
 
   const handleTogglePlan = async (u: UserRow) => {
     const newPlan = u.plan === "pro" ? "free" : "pro";
-    setPlanBusy(u.id);
+    setPlanBusy(u.id); setPlanErr("");
     try {
+      const hdrs = { "X-Admin-Secret": secret };
       const res = await axios.patch(
         `${API_BASE}/api/admin/users/${u.id}/set-plan?plan=${newPlan}`,
-        {}, { headers: { "X-Admin-Secret": secret } }
+        {}, { headers: hdrs }
       );
-      setUsers(prev => prev.map(x => x.id === u.id
-        ? { ...x, plan: newPlan, license_key: res.data.key || x.license_key }
-        : x
-      ));
-      if (res.data.key) {
-        setNewKey(res.data.key);
-        // Reload licenses to show the new one
-        const l = await axios.get(`${API_BASE}/api/admin/licenses`, { headers: { "X-Admin-Secret": secret } });
-        setLicenses(l.data.items);
-      }
-    } catch {} finally { setPlanBusy(null); }
+      if (res.data.key) setNewKey(res.data.key);
+      // Always reload both tables to reflect DB state
+      const [ul, ll] = await Promise.all([
+        axios.get(`${API_BASE}/api/admin/users`,    { headers: hdrs }),
+        axios.get(`${API_BASE}/api/admin/licenses`, { headers: hdrs }),
+      ]);
+      setUsers(ul.data.items);
+      setLicenses(ll.data.items);
+    } catch (e: any) {
+      setPlanErr(e?.response?.data?.detail || "Failed to switch plan");
+    } finally { setPlanBusy(null); }
   };
 
   const copyKey = (key: string) => {
@@ -284,7 +286,7 @@ export default function AdminPage() {
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-white/5">
-                {["User", "Plan", "License Key", "Jobs Today", "Joined"].map(h => (
+                {["User", "Plan", "Jobs Today", "Joined"].map(h => (
                   <th key={h} className="px-4 py-3 text-white/25 text-xs font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -300,32 +302,29 @@ export default function AdminPage() {
                     }
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5">
-                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
-                        u.plan === "pro"
-                          ? "bg-brand-500/15 text-brand-400 border border-brand-500/25"
-                          : "bg-white/5 text-white/30 border border-white/8"
-                      }`}>{u.plan.toUpperCase()}</span>
-                      <button onClick={() => handleTogglePlan(u)} disabled={planBusy === u.id}
-                        title={`Switch to ${u.plan === "pro" ? "free" : "pro"}`}
-                        className="text-white/20 hover:text-white/70 transition-colors disabled:opacity-30">
-                        {planBusy === u.id
-                          ? <Loader2 size={11} className="animate-spin" />
-                          : u.plan === "pro" ? <ShieldOff size={11} /> : <Crown size={11} />
-                        }
-                      </button>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                          u.plan === "pro"
+                            ? "bg-brand-500/15 text-brand-400 border border-brand-500/25"
+                            : "bg-white/5 text-white/30 border border-white/8"
+                        }`}>{u.plan.toUpperCase()}</span>
+                        <button onClick={() => handleTogglePlan(u)} disabled={planBusy === u.id}
+                          title={`Switch to ${u.plan === "pro" ? "Free" : "Pro"}`}
+                          className="text-white/20 hover:text-white/70 transition-colors disabled:opacity-30">
+                          {planBusy === u.id
+                            ? <Loader2 size={11} className="animate-spin" />
+                            : u.plan === "pro" ? <ShieldOff size={11} /> : <Crown size={11} />
+                          }
+                        </button>
+                      </div>
+                      {planErr && planBusy === null && (
+                        <span className="text-red-400 text-[10px]">{planErr}</span>
+                      )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-[11px] font-mono">
-                    {u.license_key
-                      ? <span title={u.license_key} className="text-white/40 cursor-help">
-                          {u.license_key.slice(0, 16)}…
-                        </span>
-                      : <span className="text-white/15">—</span>
-                    }
-                  </td>
                   <td className="px-4 py-3 text-xs text-white/40">
-                    {u.daily_jobs_date === today ? u.daily_jobs_used : 0}/3
+                    {u.daily_jobs_date === today ? u.daily_jobs_used : 0}
                   </td>
                   <td className="px-4 py-3 text-xs text-white/30 whitespace-nowrap">
                     {u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}
@@ -333,7 +332,7 @@ export default function AdminPage() {
                 </tr>
               ))}
               {filteredUsers.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-10 text-center text-white/20 text-xs">No users found</td></tr>
+                <tr><td colSpan={4} className="px-4 py-10 text-center text-white/20 text-xs">No users found</td></tr>
               )}
             </tbody>
           </table>
@@ -350,7 +349,7 @@ export default function AdminPage() {
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-white/5">
-                {["Key", "Email", "Plan", "Jobs Used", "Status", "Created"].map(h => (
+                {["Key", "Email", "Status"].map(h => (
                   <th key={h} className="px-4 py-3 text-white/25 text-xs font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -361,7 +360,7 @@ export default function AdminPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span title={l.key} className="text-white/50 text-[11px] font-mono cursor-help">
-                        {l.key.slice(0, 20)}…
+                        {l.key}
                       </span>
                       <button onClick={() => copyKey(l.key)} className="text-white/20 hover:text-white/60 transition-colors">
                         <Copy size={10} />
@@ -369,14 +368,6 @@ export default function AdminPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-white/50">{l.email || <span className="text-white/15">—</span>}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                      l.plan === "pro"
-                        ? "bg-brand-500/15 text-brand-400 border border-brand-500/25"
-                        : "bg-white/5 text-white/30 border border-white/8"
-                    }`}>{l.plan.toUpperCase()}</span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-white/40">{l.jobs_used || 0}</td>
                   <td className="px-4 py-3">
                     {!l.is_valid ? (
                       <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">Disabled</span>
@@ -386,13 +377,10 @@ export default function AdminPage() {
                       <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">Unused</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-xs text-white/30 whitespace-nowrap">
-                    {l.created_at ? new Date(l.created_at).toLocaleDateString() : "—"}
-                  </td>
                 </tr>
               ))}
               {licenses.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-white/20 text-xs">No keys generated yet</td></tr>
+                <tr><td colSpan={3} className="px-4 py-10 text-center text-white/20 text-xs">No keys generated yet</td></tr>
               )}
             </tbody>
           </table>

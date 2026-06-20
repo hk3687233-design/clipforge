@@ -259,7 +259,7 @@ def admin_list_licenses(
         .limit(limit)
         .all()
     )
-    # Build set of keys already activated by a user account
+    # A key is "used" if any user has it as their license_key OR if activated_at is set
     activated_keys = {
         u.license_key
         for u in db.query(User).filter(User.license_key.isnot(None)).all()
@@ -269,14 +269,13 @@ def admin_list_licenses(
         "page": page,
         "items": [
             {
-                "key":           l.key,
-                "email":         l.email,
-                "plan":          l.plan,
-                "is_valid":      l.is_valid,
-                "jobs_used":     l.jobs_used,
-                "used_by_user":  l.key in activated_keys,
-                "activated_at":  l.activated_at.isoformat() if l.activated_at else None,
-                "created_at":    l.created_at.isoformat() if l.created_at else None,
+                "key":          l.key,
+                "email":        l.email,
+                "plan":         l.plan,
+                "is_valid":     l.is_valid,
+                "jobs_used":    l.jobs_used,
+                "used_by_user": (l.key in activated_keys) or bool(l.activated_at),
+                "created_at":   l.created_at.isoformat() if l.created_at else None,
             }
             for l in items
         ],
