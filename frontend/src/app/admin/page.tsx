@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import axios from "axios";
 import {
   Scissors, Users, Key, Send, Loader2, RefreshCw, LogOut,
-  Search, Crown, ShieldOff, User, Copy, CheckCircle2,
+  Search, Crown, ShieldOff, User, Copy, CheckCircle2, Trash2,
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -35,10 +35,12 @@ export default function AdminPage() {
   const [genEmail, setGenEmail]   = useState("");
   const [genBusy,  setGenBusy]    = useState(false);
   const [genMsg,   setGenMsg]     = useState("");
-  const [planBusy, setPlanBusy]   = useState<string | null>(null);
-  const [planErr,  setPlanErr]    = useState("");
-  const [newKey,   setNewKey]     = useState("");
-  const [copied,   setCopied]     = useState(false);
+  const [planBusy, setPlanBusy]     = useState<string | null>(null);
+  const [planErr,  setPlanErr]      = useState("");
+  const [newKey,   setNewKey]       = useState("");
+  const [copied,   setCopied]       = useState(false);
+  const [delConfirm, setDelConfirm] = useState<string | null>(null);
+  const [delBusy,    setDelBusy]    = useState<string | null>(null);
 
   const load = useCallback(async (sec: string) => {
     setLoading(true); setError("");
@@ -101,6 +103,21 @@ export default function AdminPage() {
     } catch (e: any) {
       setPlanErr(e?.response?.data?.detail || "Failed to switch plan");
     } finally { setPlanBusy(null); }
+  };
+
+  const handleDelete = async (type: "user" | "license", id: string) => {
+    setDelBusy(id);
+    try {
+      const hdrs = { "X-Admin-Secret": secret };
+      const url = type === "user"
+        ? `${API_BASE}/api/admin/users/${id}`
+        : `${API_BASE}/api/admin/licenses/${encodeURIComponent(id)}`;
+      await axios.delete(url, { headers: hdrs });
+      if (type === "user") setUsers(prev => prev.filter(u => u.id !== id));
+      else setLicenses(prev => prev.filter(l => l.key !== id));
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || "Delete failed");
+    } finally { setDelBusy(null); setDelConfirm(null); }
   };
 
   const copyKey = (key: string) => {
@@ -275,7 +292,7 @@ export default function AdminPage() {
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-white/5">
-                {["User", "Plan", "Jobs Today", "Joined"].map(h => (
+                {["User", "Plan", "Jobs Today", "Joined", ""].map(h => (
                   <th key={h} className="px-4 py-3 text-white/25 text-xs font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -318,10 +335,23 @@ export default function AdminPage() {
                   <td className="px-4 py-3 text-xs text-white/30 whitespace-nowrap">
                     {u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}
                   </td>
+                  <td className="px-4 py-3">
+                    {delBusy === u.id ? <Loader2 size={11} className="animate-spin text-white/30" /> :
+                     delConfirm === u.id ? (
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => handleDelete("user", u.id)} className="text-red-400 text-[10px] font-bold hover:text-red-300">Del?</button>
+                        <button onClick={() => setDelConfirm(null)} className="text-white/20 text-[10px] hover:text-white/50">✕</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setDelConfirm(u.id)} className="text-white/10 hover:text-red-400 transition-colors">
+                        <Trash2 size={11} />
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
               {filteredUsers.length === 0 && (
-                <tr><td colSpan={4} className="px-4 py-10 text-center text-white/20 text-xs">No users found</td></tr>
+                <tr><td colSpan={5} className="px-4 py-10 text-center text-white/20 text-xs">No users found</td></tr>
               )}
             </tbody>
           </table>
@@ -338,7 +368,7 @@ export default function AdminPage() {
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-white/5">
-                {["Key", "Email", "Status"].map(h => (
+                {["Key", "Email", "Status", ""].map(h => (
                   <th key={h} className="px-4 py-3 text-white/25 text-xs font-semibold whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -366,10 +396,23 @@ export default function AdminPage() {
                       <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">Unused</span>
                     )}
                   </td>
+                  <td className="px-4 py-3">
+                    {delBusy === l.key ? <Loader2 size={11} className="animate-spin text-white/30" /> :
+                     delConfirm === l.key ? (
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => handleDelete("license", l.key)} className="text-red-400 text-[10px] font-bold hover:text-red-300">Del?</button>
+                        <button onClick={() => setDelConfirm(null)} className="text-white/20 text-[10px] hover:text-white/50">✕</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setDelConfirm(l.key)} className="text-white/10 hover:text-red-400 transition-colors">
+                        <Trash2 size={11} />
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
               {licenses.length === 0 && (
-                <tr><td colSpan={3} className="px-4 py-10 text-center text-white/20 text-xs">No keys generated yet</td></tr>
+                <tr><td colSpan={4} className="px-4 py-10 text-center text-white/20 text-xs">No keys generated yet</td></tr>
               )}
             </tbody>
           </table>

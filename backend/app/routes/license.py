@@ -452,3 +452,33 @@ def admin_enable_license(
     lic.is_valid = True
     db.commit()
     return {"enabled": True}
+
+
+@router.delete("/api/admin/users/{user_id}")
+def admin_delete_user(
+    user_id: str,
+    db: Session = Depends(get_db),
+    _: None = Depends(_check_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    db.delete(user)
+    db.commit()
+    return {"deleted": True}
+
+
+@router.delete("/api/admin/licenses/{key}")
+def admin_delete_license(
+    key: str,
+    db: Session = Depends(get_db),
+    _: None = Depends(_check_admin),
+):
+    lic = db.query(License).filter(License.key == key).first()
+    if not lic:
+        raise HTTPException(404, "License not found")
+    # Unlink key from any user before deleting
+    db.query(User).filter(User.license_key == key).update({"license_key": None, "plan": "free"})
+    db.delete(lic)
+    db.commit()
+    return {"deleted": True}
