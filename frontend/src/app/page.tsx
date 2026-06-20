@@ -6,6 +6,7 @@ import {
   Scissors, CheckCircle2, Zap, Download, Shield, Play,
   Sparkles, ArrowRight, Star, X, Lock,
   Film, Package, Link2, TrendingUp, Clock, User, ChevronRight,
+  Twitter, Youtube, Mail,
 } from "lucide-react";
 
 const LEMON_URL = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#";
@@ -14,6 +15,7 @@ export default function Home() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [videoOpen, setVideoOpen] = useState(false);
+  const [barDismissed, setBarDismissed] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Secret: 5 clicks on logo → admin
@@ -46,6 +48,29 @@ export default function Home() {
         backgroundImage: `linear-gradient(rgba(168,85,247,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(168,85,247,0.06) 1px, transparent 1px)`,
         backgroundSize: "64px 64px",
       }} />
+
+      {/* ── ANNOUNCEMENT BAR ───────────────────────────────────── */}
+      {!barDismissed && (
+        <div className="relative z-30 w-full bg-gradient-to-r from-[#110a1e] via-[#1a0d2e] to-[#110a1e] border-b border-brand-500/20">
+          <div className="max-w-6xl mx-auto px-4 py-2.5 flex items-center justify-center gap-2 sm:gap-4 pr-10">
+            <span className="text-base shrink-0">🔥</span>
+            <p className="text-white/75 text-xs sm:text-sm font-medium leading-tight text-center">
+              <span className="text-white font-bold">Launch Special — 50% OFF</span>
+              <span className="text-white/50 mx-1.5 hidden sm:inline">·</span>
+              <span className="text-white/55 hidden sm:inline">Price doubles to $58 after launch period ends</span>
+            </p>
+            <a href={LEMON_URL}
+              className="shrink-0 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white text-xs font-black px-3 py-1.5 rounded-lg transition-all shadow-md shadow-brand-500/30 whitespace-nowrap">
+              Claim $29 →
+            </a>
+          </div>
+          <button
+            onClick={() => setBarDismissed(true)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors p-1">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* ── NAVBAR ─────────────────────────────────────────────── */}
       <nav className="relative z-20 flex items-center justify-between max-w-6xl mx-auto px-6 py-5">
@@ -84,7 +109,6 @@ export default function Home() {
 
       {/* ── HERO ───────────────────────────────────────────────── */}
       <section className="relative z-10 text-center max-w-5xl mx-auto px-6 pt-16 pb-20">
-        {/* Badge */}
         <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-brand-500/8 border border-brand-500/25 text-brand-400 text-xs font-bold tracking-widest uppercase mb-8 backdrop-blur-sm">
           <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse shrink-0" />
           AI-Powered Clip Extractor
@@ -104,7 +128,6 @@ export default function Home() {
           cuts individual clips — with affiliate buy links — ready to post in minutes.
         </p>
 
-        {/* CTAs */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
           <a href={LEMON_URL}
             className="w-full sm:w-auto relative flex items-center justify-center gap-3 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white font-black px-8 py-4 rounded-2xl text-lg transition-all shadow-2xl shadow-brand-500/30 hover:shadow-brand-500/50 group">
@@ -118,13 +141,12 @@ export default function Home() {
         </div>
 
         <div className="flex items-center justify-center gap-3 mb-2">
-          <span className="line-through text-white/25 text-sm">$99</span>
+          <span className="line-through text-white/25 text-sm">$58</span>
           <span className="w-1 h-1 rounded-full bg-green-400/50" />
-          <span className="text-green-400 font-semibold text-sm">70% off — Launch price</span>
+          <span className="text-green-400 font-semibold text-sm">50% off — Launch price · doubles soon</span>
         </div>
         <p className="text-white/25 text-sm">One-time payment · No subscription · No hidden fees</p>
 
-        {/* Trust badges */}
         <div className="flex items-center justify-center gap-6 mt-7 flex-wrap">
           {[
             { icon: <Star size={13} className="text-yellow-400 fill-yellow-400" />, text: "4.9/5 from creators" },
@@ -138,7 +160,6 @@ export default function Home() {
 
       {/* ── DEMO VIDEO ─────────────────────────────────────────── */}
       <section className="relative z-10 max-w-5xl mx-auto px-6 pb-24">
-        {/* Gradient border wrapper */}
         <div className="rounded-3xl p-px bg-gradient-to-br from-brand-500/50 via-purple-600/25 to-pink-600/20 shadow-2xl shadow-brand-500/15">
           <div
             className="relative rounded-[calc(1.5rem-1px)] overflow-hidden cursor-pointer group bg-[#08080d]"
@@ -188,9 +209,7 @@ export default function Home() {
         </div>
 
         <div className="grid sm:grid-cols-3 gap-6 relative">
-          {/* Connecting line between steps */}
           <div className="hidden sm:block absolute top-10 left-[calc(33.33%+1.5rem)] right-[calc(33.33%+1.5rem)] h-px bg-gradient-to-r from-brand-500/40 via-purple-500/40 to-pink-500/40" />
-
           {[
             { icon: <Link2 size={22} />, step: "01", title: "Paste any video URL", body: "YouTube, TikTok, Instagram Reels, or upload directly. ClipForge downloads and processes in the background — no install needed.", gradient: "from-brand-500 to-brand-600" },
             { icon: <Sparkles size={22} />, step: "02", title: "AI detects every product", body: "Advanced AI reads chapters, timestamps, and descriptions. Finds every product automatically — instant and highly accurate, even in 45-minute videos.", gradient: "from-violet-500 to-purple-600" },
@@ -247,13 +266,15 @@ export default function Home() {
             <span className="text-white/40 text-sm ml-2">4.9 / 5 average rating</span>
           </div>
         </div>
-        <div className="grid sm:grid-cols-3 gap-5">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {[
-            { name: "Marcus T.", handle: "@marcustechreviews", avatar: "MT", badge: "Pro", review: "I used to spend 3+ hours cutting product clips from my reviews. ClipForge does it in literally 2 minutes. This is insane value for $29.", avatarGrad: "from-brand-500 to-purple-600" },
-            { name: "Priya S.", handle: "@priyaunboxes", avatar: "PS", badge: "Pro", review: "Detected 100+ products from my 45-minute tech haul video. Every single one was accurate. The affiliate links saved me another hour of work.", avatarGrad: "from-violet-500 to-pink-600" },
-            { name: "Jake R.", handle: "@jakereviews", avatar: "JR", badge: "Pro", review: "Bought it on a whim and it's already paid for itself 10x over. ZIP download of all clips in one click is a game changer for Reels repurposing.", avatarGrad: "from-pink-500 to-orange-500" },
+            { name: "Marcus T.", handle: "@marcustechreviews", avatar: "MT", badge: "Pro", review: "I used to spend 3+ hours cutting product clips from my reviews. ClipForge does it in literally 2 minutes. This is insane value for $29.", grad: "from-brand-500 to-purple-600" },
+            { name: "Priya S.", handle: "@priyaunboxes", avatar: "PS", badge: "Pro", review: "Detected 100+ products from my 45-minute tech haul video. Every single one was accurate. The affiliate links saved me another hour of work.", grad: "from-violet-500 to-pink-600" },
+            { name: "Jake R.", handle: "@jakereviews", avatar: "JR", badge: "Pro", review: "Bought it on a whim and it's already paid for itself 10x over. ZIP download of all clips in one click is a game changer for Reels repurposing.", grad: "from-pink-500 to-orange-500" },
+            { name: "Alex W.", handle: "@alexwgadgets", avatar: "AW", badge: "Pro", review: "Processed 30 videos in one weekend. My affiliate income literally tripled in the first month. Nothing else comes close to this for $29.", grad: "from-orange-500 to-red-500" },
+            { name: "Sophie M.", handle: "@sophielifestyle", avatar: "SM", badge: "Pro", review: "I was skeptical about AI accuracy but it found every single product in my haul videos — even things I forgot I mentioned. Unreal.", grad: "from-emerald-500 to-teal-600" },
+            { name: "Tyler K.", handle: "@tylerunboxing", avatar: "TK", badge: "Pro", review: "I go from a 1-hour review to 60 TikTok-ready clips in about 5 minutes flat. This is the most ROI-positive tool I've ever bought for my channel.", grad: "from-sky-500 to-blue-600" },
           ].map((r, i) => (
-            /* Gradient border card */
             <div key={i} className="rounded-2xl p-px bg-gradient-to-b from-white/12 to-white/[0.03]">
               <div className="rounded-[calc(1rem-1px)] p-6 flex flex-col gap-4 bg-[#0e0e16] h-full">
                 <div className="flex items-center gap-1">
@@ -262,7 +283,7 @@ export default function Home() {
                 <p className="text-white/65 text-sm leading-relaxed flex-1">"{r.review}"</p>
                 <div className="flex items-center justify-between pt-3 border-t border-white/5">
                   <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${r.avatarGrad} flex items-center justify-center text-white text-xs font-black shrink-0 shadow-lg`}>{r.avatar}</div>
+                    <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${r.grad} flex items-center justify-center text-white text-xs font-black shrink-0 shadow-lg`}>{r.avatar}</div>
                     <div>
                       <p className="text-white/85 text-xs font-bold">{r.name}</p>
                       <p className="text-white/30 text-xs">{r.handle}</p>
@@ -316,19 +337,23 @@ export default function Home() {
             </a>
           </div>
 
-          {/* Pro Plan — gradient border */}
+          {/* Pro Plan */}
           <div className="relative rounded-3xl p-px bg-gradient-to-b from-brand-500/60 via-purple-600/40 to-transparent shadow-2xl shadow-brand-500/20">
             <div className="rounded-[calc(1.5rem-1px)] bg-[#0a0a12] p-8 flex flex-col h-full">
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-brand-500 to-purple-600 text-white text-xs font-black px-6 py-2 rounded-full tracking-wide shadow-lg shadow-brand-500/30 whitespace-nowrap">
                 ⭐ MOST POPULAR
               </div>
-              <div className="mb-8 pt-2">
-                <p className="text-brand-400 text-xs font-bold uppercase tracking-widest mb-4">Pro Lifetime</p>
-                <div className="flex items-end gap-3 mb-2">
-                  <span className="text-white/25 line-through text-xl self-end pb-1">$99</span>
+              <div className="mb-6 pt-2">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-brand-400 text-xs font-bold uppercase tracking-widest">Pro Lifetime</p>
+                  <span className="text-[10px] font-black text-green-400 bg-green-500/10 border border-green-500/25 px-2.5 py-1 rounded-full tracking-wide">50% OFF</span>
+                </div>
+                <div className="flex items-end gap-3 mb-1">
+                  <span className="text-white/25 line-through text-xl self-end pb-1">$58</span>
                   <span className="text-5xl font-black text-white">$29</span>
                 </div>
                 <p className="text-white/30 text-sm">one-time · lifetime · no renewal</p>
+                <p className="text-orange-400/70 text-xs mt-1.5 font-medium">⏳ Price doubles to $58 after launch</p>
               </div>
               <ul className="space-y-3 mb-8 flex-1">
                 {[
@@ -368,7 +393,7 @@ export default function Home() {
             <p className="text-white/35 text-xs leading-relaxed">
               After payment, your license key is emailed instantly. Sign in at{" "}
               <a href="/auth" className="text-brand-400 hover:text-brand-300 underline">getclipforge.online/auth</a>
-              {" "}→ "Activate Key" tab → paste your key → instant Pro access.
+              {" "}→ Activate Key tab → paste your key → instant Pro access.
             </p>
           </div>
           <a href="/auth"
@@ -390,9 +415,9 @@ export default function Home() {
             { q: "How accurate is the product detection?", a: "For YouTube videos with chapters: 100% accurate, instant. For videos with timestamps in description: very accurate. For others: Whisper AI transcription is used as fallback — still highly accurate." },
             { q: "Do I need any API keys or subscriptions?", a: "No. ClipForge handles everything server-side — just paste a URL or upload a video and you're done. No setup, no config, no hidden requirements." },
             { q: "What is the difference between Free and Pro?", a: "Free allows 3 exports/day, max 10-minute videos, max 5 clips. Pro is unlimited — unlimited videos, 100+ clips per video, ZIP download, affiliate link extraction, and priority processing." },
-            { q: "How do I activate my license key?", a: "After purchase, check your email for the license key. Go to getclipforge.online/auth, sign in or create an account, then click 'Activate Key' tab and paste your key. Your account instantly upgrades to Pro on any device." },
+            { q: "How do I activate my license key?", a: "After purchase, check your email for the license key. Go to getclipforge.online/auth, sign in or create an account, then click 'Activate Key' and paste your key. Your account instantly upgrades to Pro." },
             { q: "Is this a one-time purchase?", a: "Yes. Pay $29 once, use forever. No monthly fees, no renewal, no surprises. Price increases after the launch period ends." },
-            { q: "Can I get a refund?", a: "Yes — 7-day no-questions-asked refund via Lemon Squeezy. Just email us and we'll process it immediately." },
+            { q: "Can I get a refund?", a: "Yes — 7-day no-questions-asked refund via Lemon Squeezy. Just email support@getclipforge.online and we'll process it immediately." },
           ].map((faq, i) => (
             <div key={i} className="glass glass-hover rounded-2xl p-5 border border-white/6 group">
               <p className="font-bold text-white/90 text-sm mb-2 group-hover:text-white transition-colors">{faq.q}</p>
@@ -404,10 +429,8 @@ export default function Home() {
 
       {/* ── FINAL CTA BANNER ───────────────────────────────────── */}
       <section className="relative z-10 max-w-4xl mx-auto px-6 pb-28">
-        {/* Gradient border wrapper */}
         <div className="rounded-3xl p-px bg-gradient-to-br from-brand-500/55 via-purple-600/30 to-pink-600/20 overflow-hidden shadow-2xl shadow-brand-500/15">
           <div className="rounded-[calc(1.5rem-1px)] bg-gradient-to-br from-[#0b0b14] to-[#080810] p-10 sm:p-16 text-center relative overflow-hidden">
-            {/* Inner glow */}
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
               <div className="w-[500px] h-[300px] rounded-full bg-brand-500/8 blur-3xl" />
             </div>
@@ -440,34 +463,90 @@ export default function Home() {
       </section>
 
       {/* ── FOOTER ─────────────────────────────────────────────── */}
-      <footer className="relative z-10 border-t border-white/5 py-12">
-        <div className="max-w-5xl mx-auto px-6 space-y-7">
-          <div className="rounded-2xl border border-white/6 bg-white/[0.02] px-5 py-4 text-white/25 text-xs leading-relaxed text-center">
-            <strong className="text-white/40">Legal Notice:</strong> ClipForge is a neutral processing tool. Users are solely responsible for ensuring they have the necessary rights, licences, or permissions to process any video content. ClipForge does not host, store, or distribute third-party copyrighted material. Use of this tool must comply with the terms of service of the source platform and all applicable copyright laws. Intended uses include processing your own videos, licensed content, or content under fair use for review and commentary purposes.
-          </div>
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center shadow-md shadow-brand-500/20">
-                <Scissors size={13} className="text-white" />
+      <footer className="relative z-10 border-t border-white/5">
+        <div className="max-w-6xl mx-auto px-6 py-14">
+          {/* Top grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-12">
+            {/* Brand column */}
+            <div className="col-span-2 sm:col-span-1 space-y-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center shadow-md shadow-brand-500/20">
+                  <Scissors size={14} className="text-white" />
+                </div>
+                <span className="font-black text-base">ClipForge</span>
               </div>
-              <span className="font-black text-sm">ClipForge</span>
-              <span className="text-white/20 text-sm">· Built for content creators</span>
+              <p className="text-white/35 text-xs leading-relaxed max-w-[180px]">
+                AI-powered clip extractor for product reviewers and affiliate creators.
+              </p>
+              <div className="flex items-center gap-3 pt-1">
+                <a href="mailto:support@getclipforge.online"
+                  className="w-8 h-8 rounded-lg bg-white/5 hover:bg-brand-500/20 border border-white/8 hover:border-brand-500/30 flex items-center justify-center text-white/35 hover:text-brand-400 transition-all">
+                  <Mail size={13} />
+                </a>
+                <a href="https://twitter.com/clipforge" target="_blank" rel="noopener noreferrer"
+                  className="w-8 h-8 rounded-lg bg-white/5 hover:bg-brand-500/20 border border-white/8 hover:border-brand-500/30 flex items-center justify-center text-white/35 hover:text-brand-400 transition-all">
+                  <Twitter size={13} />
+                </a>
+                <a href="https://youtube.com/@clipforge" target="_blank" rel="noopener noreferrer"
+                  className="w-8 h-8 rounded-lg bg-white/5 hover:bg-brand-500/20 border border-white/8 hover:border-brand-500/30 flex items-center justify-center text-white/35 hover:text-brand-400 transition-all">
+                  <Youtube size={13} />
+                </a>
+              </div>
             </div>
-            <div className="flex items-center gap-4 text-white/25 text-xs flex-wrap justify-center">
-              <span>© 2026 ClipForge</span>
-              <span className="text-white/10">·</span>
-              <a href="/terms" className="hover:text-white/55 transition-colors">Terms</a>
-              <span className="text-white/10">·</span>
-              <a href="/privacy" className="hover:text-white/55 transition-colors">Privacy</a>
-              <span className="text-white/10">·</span>
-              <a href="/refund" className="hover:text-white/55 transition-colors">Refunds</a>
-              <span className="text-white/10">·</span>
-              <a href="mailto:support@getclipforge.online" className="hover:text-white/55 transition-colors">support@getclipforge.online</a>
+
+            {/* Product column */}
+            <div className="space-y-3">
+              <p className="text-white/60 text-xs font-bold uppercase tracking-widest mb-4">Product</p>
+              {[
+                { label: "Features", href: "#features" },
+                { label: "How it Works", href: "#how-it-works" },
+                { label: "Pricing", href: "#pricing" },
+                { label: "Open Tool", href: "/tool" },
+                { label: "Sign In", href: "/auth" },
+              ].map(l => (
+                <a key={l.label} href={l.href} className="block text-white/35 hover:text-white/75 text-sm transition-colors">{l.label}</a>
+              ))}
             </div>
-            <a href="/auth"
-              className="text-white/25 hover:text-white/60 text-xs transition-colors flex items-center gap-1.5">
-              <User size={12} /> Sign In / Sign Up
-            </a>
+
+            {/* Legal column */}
+            <div className="space-y-3">
+              <p className="text-white/60 text-xs font-bold uppercase tracking-widest mb-4">Legal</p>
+              {[
+                { label: "Privacy Policy", href: "/privacy" },
+                { label: "Terms of Service", href: "/terms" },
+                { label: "Refund Policy", href: "/refund" },
+              ].map(l => (
+                <a key={l.label} href={l.href} className="block text-white/35 hover:text-white/75 text-sm transition-colors">{l.label}</a>
+              ))}
+            </div>
+
+            {/* Support column */}
+            <div className="space-y-3">
+              <p className="text-white/60 text-xs font-bold uppercase tracking-widest mb-4">Support</p>
+              {[
+                { label: "FAQ", href: "#faq" },
+                { label: "Contact Us", href: "mailto:support@getclipforge.online" },
+                { label: "Activate License", href: "/auth" },
+                { label: "Get Pro — $29", href: LEMON_URL },
+              ].map(l => (
+                <a key={l.label} href={l.href} className="block text-white/35 hover:text-white/75 text-sm transition-colors">{l.label}</a>
+              ))}
+            </div>
+          </div>
+
+          {/* Legal notice */}
+          <div className="rounded-2xl border border-white/6 bg-white/[0.02] px-5 py-4 text-white/22 text-xs leading-relaxed text-center mb-8">
+            <strong className="text-white/38">Legal Notice:</strong> ClipForge is a neutral processing tool. Users are solely responsible for ensuring they have the necessary rights, licences, or permissions to process any video content. ClipForge does not host, store, or distribute third-party copyrighted material. Use of this tool must comply with the terms of service of the source platform and all applicable copyright laws.
+          </div>
+
+          {/* Bottom bar */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-white/5">
+            <p className="text-white/22 text-xs">© 2026 ClipForge. All rights reserved.</p>
+            <div className="flex items-center gap-1 text-white/20 text-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="ml-1">All systems operational</span>
+            </div>
+            <p className="text-white/22 text-xs">Built for content creators worldwide.</p>
           </div>
         </div>
       </footer>
