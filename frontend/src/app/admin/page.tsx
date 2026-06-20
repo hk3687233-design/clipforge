@@ -1,337 +1,233 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import axios from "axios";
 import {
-  Shield, Key, Users, Copy, CheckCircle2,
-  XCircle, RefreshCw, Plus, Search, Eye, EyeOff, Zap,
-  Lock
+  Scissors, Users, Key, Send, Loader2, RefreshCw, LogOut, Search
 } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const ADMIN_KEY = "clipforge_admin_secret";
 
-interface License {
-  key: string;
-  plan: string;
-  email: string | null;
-  jobs_used: number;
-  is_valid: boolean;
-  device_bound: boolean;
-  activated_at: string | null;
-  created_at: string;
+interface UserRow {
+  id: string; email: string; name?: string; plan: string;
+  google_linked: boolean; license_key?: string; is_admin: boolean;
+  daily_jobs_used: number; daily_jobs_date?: string; created_at?: string;
+}
+interface Stats {
+  licenses: { total: number; pro: number; free: number; active: number };
+  jobs: { total: number; done: number; failed: number };
+  revenue_estimate: string;
 }
 
-export default function AdminPanel() {
-  const [secret, setSecret] = useState("");
-  const [authed, setAuthed] = useState(false);
-  const [authError, setAuthError] = useState("");
-  const [showSecret, setShowSecret] = useState(false);
-
-  const [stats, setStats] = useState<any>(null);
-  const [licenses, setLicenses] = useState<License[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [copied, setCopied] = useState<string | null>(null);
-  const [actionMsg, setActionMsg] = useState("");
-
-  // Generate form
+export default function AdminPage() {
+  const [secret, setSecret]     = useState("");
+  const [authed, setAuthed]     = useState(false);
+  const [users,  setUsers]      = useState<UserRow[]>([]);
+  const [stats,  setStats]      = useState<Stats | null>(null);
+  const [loading, setLoading]   = useState(false);
+  const [error,  setError]      = useState("");
+  const [search, setSearch]     = useState("");
   const [genEmail, setGenEmail] = useState("");
-  const [genPlan, setGenPlan] = useState<"free" | "pro">("pro");
-  const [genLoading, setGenLoading] = useState(false);
-  const [genResult, setGenResult] = useState<string | null>(null);
+  const [genBusy,  setGenBusy]  = useState(false);
+  const [genMsg,   setGenMsg]   = useState("");
 
-  const h = useCallback(() => ({ "X-Admin-Secret": secret }), [secret]);
-
-  const fetchStats = useCallback(async () => {
+  const load = useCallback(async (sec: string) => {
+    setLoading(true); setError("");
     try {
-      const r = await fetch(`${API}/api/admin/stats`, { headers: h() });
-      if (r.status === 403) { setAuthed(false); return; }
-      setStats(await r.json());
-    } catch {}
-  }, [h]);
-
-  const fetchLicenses = useCallback(async () => {
-    setLoading(true);
-    try {
-      const r = await fetch(`${API}/api/admin/licenses?page=${page}&limit=20`, { headers: h() });
-      const data = await r.json();
-      // API returns {total, page, items:[]}
-      setLicenses(data.items || []);
-      setTotal(data.total || 0);
-    } catch {}
-    setLoading(false);
-  }, [h, page]);
-
-  const login = async () => {
-    setAuthError("");
-    const r = await fetch(`${API}/api/admin/stats`, {
-      headers: { "X-Admin-Secret": secret }
-    });
-    if (r.ok) {
-      const data = await r.json();
-      setAuthed(true);
-      setStats(data);
-      fetchLicenses();
-    } else {
-      setAuthError("Invalid admin secret!");
-    }
-  };
+      const hdrs = { "X-Admin-Secret": sec };
+      const [u, s] = await Promise.all([
+        axios.get(`${API_BASE}/api/admin/users`, { headers: hdrs }),
+        axios.get(`${API_BASE}/api/admin/stats`, { headers: hdrs }),
+      ]);
+      setUsers(u.data.items); setStats(s.data); setAuthed(true);
+      localStorage.setItem(ADMIN_KEY, sec);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Invalid admin secret");
+      setAuthed(false);
+    } finally { setLoading(false); }
+  }, []);
 
   useEffect(() => {
-    if (authed) { fetchStats(); fetchLicenses(); }
-  }, [authed, page]);
+    const saved = localStorage.getItem(ADMIN_KEY);
+    if (saved) { setSecret(saved); load(saved); }
+  }, [load]);
 
-  const toggleLicense = async (key: string, isValid: boolean) => {
-    const endpoint = isValid ? "disable" : "enable";
-    await fetch(`${API}/api/admin/licenses/${key}/${endpoint}`, {
-      method: "PATCH", headers: h()
-    });
-    setActionMsg(`License ${isValid ? "disabled" : "enabled"} ✓`);
-    setTimeout(() => setActionMsg(""), 2000);
-    fetchLicenses();
-    fetchStats();
-  };
+  const handleLogin  = (e: React.FormEvent) => { e.preventDefault(); if (secret) load(secret); };
 
-  const generateLicense = async () => {
-    setGenLoading(true);
-    setGenResult(null);
+  const handleGenerate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!genEmail.trim()) return;
+    setGenBusy(true); setGenMsg("");
+    const hdrs = { "X-Admin-Secret": secret };
     try {
-      const params = new URLSearchParams({ plan: genPlan });
-      if (genEmail.trim()) params.append("email", genEmail.trim());
-      const r = await fetch(`${API}/api/admin/licenses/generate?${params}`, {
-        method: "POST",
-        headers: h(),
-      });
-      if (!r.ok) {
-        const err = await r.text();
-        setGenResult(`Error ${r.status}: ${err}`);
-      } else {
-        const data = await r.json();
-        setGenResult(data.key || data.license_key || JSON.stringify(data));
+      const res = await axios.post(
+        `${API_BASE}/api/admin/licenses/generate?plan=pro&email=${encodeURIComponent(genEmail.trim())}`,
+        {}, { headers: hdrs }
+      );
+      setGenMsg(`✓ Key sent: ${res.data.key}`);
+      // Also upgrade user account if they already signed up
+      const u = users.find(x => x.email.toLowerCase() === genEmail.trim().toLowerCase());
+      if (u) {
+        await axios.patch(`${API_BASE}/api/admin/users/${u.id}/set-pro`, {}, { headers: hdrs });
       }
+      setGenEmail(""); load(secret);
     } catch (e: any) {
-      setGenResult(`Network error: ${e?.message || "Check API URL"}`);
-    }
-    setGenLoading(false);
+      setGenMsg(`✗ ${e?.response?.data?.detail || "Failed"}`);
+    } finally { setGenBusy(false); }
   };
 
-  const copy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(text);
-    setTimeout(() => setCopied(null), 2000);
-  };
-
-  const filtered = licenses.filter(l =>
+  const today = new Date().toISOString().slice(0, 10);
+  const filtered = users.filter(u =>
     !search ||
-    l.key.toLowerCase().includes(search.toLowerCase()) ||
-    (l.email || "").toLowerCase().includes(search.toLowerCase())
+    u.email.toLowerCase().includes(search.toLowerCase()) ||
+    (u.name || "").toLowerCase().includes(search.toLowerCase())
   );
 
-  const totalPages = Math.ceil(total / 20) || 1;
-
-  // ── Login ─────────────────────────────────────────────────────────────────
-  if (!authed) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4 bg-[#0a0a0f]">
-        <div className="glass rounded-3xl p-10 w-full max-w-md border border-white/10 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-brand-600/20 border border-brand-500/20 flex items-center justify-center mx-auto mb-6">
-            <Lock size={28} className="text-brand-400" />
+  if (!authed) return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="w-full max-w-sm glass border border-white/10 rounded-3xl p-7 space-y-5">
+        <div className="flex items-center gap-2.5 justify-center">
+          <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center">
+            <Scissors size={15} className="text-white" />
           </div>
-          <h1 className="text-2xl font-black mb-1">Admin Panel</h1>
-          <p className="text-white/30 text-sm mb-8">ClipForge — Internal Dashboard</p>
-          <div className="relative mb-4">
-            <input
-              type={showSecret ? "text" : "password"}
-              value={secret}
-              onChange={e => setSecret(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && login()}
-              placeholder="Enter admin secret..."
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/30 focus:outline-none focus:border-brand-500/50 pr-10"
-            />
-            <button onClick={() => setShowSecret(!showSecret)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
-              {showSecret ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-          {authError && <p className="text-red-400 text-xs mb-4">{authError}</p>}
-          <button onClick={login} className="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold py-3 rounded-xl transition-all">
-            Enter Dashboard
-          </button>
-          <p className="text-white/20 text-xs mt-4">Contact admin for access credentials.</p>
+          <span className="font-bold text-lg">Admin Panel</span>
         </div>
+        <form onSubmit={handleLogin} className="space-y-3">
+          <input type="password" placeholder="Admin secret" value={secret}
+            onChange={e => setSecret(e.target.value)}
+            className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-500/50 transition-all"
+            autoFocus />
+          <button type="submit" disabled={loading}
+            className="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold py-2.5 rounded-xl transition-all disabled:opacity-50 text-sm">
+            {loading ? <Loader2 size={15} className="animate-spin mx-auto" /> : "Enter Admin Panel"}
+          </button>
+        </form>
+        {error && <p className="text-red-400 text-xs text-center">{error}</p>}
       </div>
-    );
-  }
+    </div>
+  );
 
-  // ── Dashboard ─────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#0a0a0f] px-4 py-10 max-w-7xl mx-auto">
+    <div className="min-h-screen px-4 py-8 max-w-5xl mx-auto space-y-6 relative overflow-hidden">
+      <div className="orb w-96 h-96 bg-brand-600/10 -top-32 -left-32" />
+
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-black flex items-center gap-3">
-            <Shield size={28} className="text-brand-400" /> Admin Panel
-          </h1>
-          <p className="text-white/30 text-sm mt-1">ClipForge — Full Control Dashboard</p>
-        </div>
+      <div className="relative z-10 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {actionMsg && <span className="text-green-400 text-sm">{actionMsg}</span>}
-          <button onClick={() => { fetchStats(); fetchLicenses(); }}
-            className="flex items-center gap-2 glass border border-white/10 px-4 py-2 rounded-xl text-sm text-white/60 hover:text-white transition-all">
-            <RefreshCw size={14} /> Refresh
+          <div className="w-9 h-9 bg-brand-600 rounded-xl flex items-center justify-center">
+            <Scissors size={17} className="text-white" />
+          </div>
+          <div>
+            <h1 className="font-bold text-lg text-white leading-none">ClipForge Admin</h1>
+            <p className="text-white/30 text-xs mt-0.5">Dashboard & User Management</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <button onClick={() => load(secret)} title="Refresh"
+            className="p-2 text-white/30 hover:text-white/70 hover:bg-white/5 rounded-lg transition-all">
+            <RefreshCw size={15} />
+          </button>
+          <button title="Logout"
+            onClick={() => { localStorage.removeItem(ADMIN_KEY); setAuthed(false); setSecret(""); }}
+            className="p-2 text-white/30 hover:text-white/70 hover:bg-white/5 rounded-lg transition-all">
+            <LogOut size={15} />
           </button>
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats row */}
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+        <div className="relative z-10 grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: "Total Users", value: stats.licenses?.total ?? 0, icon: <Key size={16}/>, color: "text-brand-400" },
-            { label: "Pro Users", value: stats.licenses?.pro ?? 0, icon: <Zap size={16}/>, color: "text-purple-400" },
-            { label: "Free Users", value: stats.licenses?.free ?? 0, icon: <Users size={16}/>, color: "text-blue-400" },
-            { label: "Active", value: stats.licenses?.active ?? 0, icon: <CheckCircle2 size={16}/>, color: "text-green-400" },
-          ].map((s, i) => (
-            <div key={i} className="glass rounded-2xl p-5 text-center border border-white/8">
-              <div className={`flex justify-center mb-2 ${s.color}`}>{s.icon}</div>
-              <p className="text-2xl font-black text-white">{s.value}</p>
-              <p className="text-white/35 text-xs mt-1">{s.label}</p>
+            { label: "Pro Users",    val: stats.licenses.pro,         color: "text-brand-400" },
+            { label: "Free Users",   val: stats.licenses.free,        color: "text-white/50" },
+            { label: "Total Jobs",   val: stats.jobs.total,           color: "text-emerald-400" },
+            { label: "Revenue (est)", val: stats.revenue_estimate,    color: "text-yellow-400" },
+          ].map(s => (
+            <div key={s.label} className="glass border border-white/8 rounded-2xl p-4">
+              <p className="text-white/30 text-[11px] mb-1">{s.label}</p>
+              <p className={`font-bold text-xl ${s.color} truncate`}>{s.val}</p>
             </div>
           ))}
         </div>
       )}
 
-      {/* Generate License */}
-      <div className="glass rounded-2xl p-6 border border-white/8 mb-8 max-w-lg">
-        <h2 className="font-bold text-white/90 flex items-center gap-2 mb-5">
-          <Plus size={16} className="text-brand-400" /> Generate License
-        </h2>
-        <div className="space-y-3">
-          <div>
-            <label className="text-white/40 text-xs mb-1 block">Plan</label>
-            <select value={genPlan} onChange={e => setGenPlan(e.target.value as any)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50">
-              <option value="pro">Pro Lifetime</option>
-              <option value="free">Free</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-white/40 text-xs mb-1 block">Email (optional)</label>
-            <input type="email" value={genEmail} onChange={e => setGenEmail(e.target.value)}
-              placeholder="user@example.com"
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-500/50"
-            />
-          </div>
-          <button onClick={generateLicense} disabled={genLoading}
-            className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
-            {genLoading ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />} Generate Key
-          </button>
-          {genResult && (
-            <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2.5 cursor-pointer"
-              onClick={() => copy(genResult!)}>
-              <code className="text-green-400 text-xs flex-1 break-all">{genResult}</code>
-              {copied === genResult ? <CheckCircle2 size={14} className="text-green-400 shrink-0" /> : <Copy size={14} className="text-white/40 shrink-0" />}
-            </div>
-          )}
+      {/* Generate Key — offline / WhatsApp sale */}
+      <div className="relative z-10 glass border border-brand-500/20 rounded-2xl p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <Key size={14} className="text-brand-400" />
+          <h2 className="font-semibold text-white/90 text-sm">Generate Pro Key for Customer</h2>
         </div>
+        <p className="text-white/35 text-xs leading-relaxed">
+          For offline / WhatsApp payments — enter the customer's email, a Pro license key will be generated and emailed to them instantly.
+        </p>
+        <form onSubmit={handleGenerate} className="flex gap-2">
+          <input type="email" placeholder="customer@email.com" value={genEmail}
+            onChange={e => setGenEmail(e.target.value)} required
+            className="flex-1 bg-white/[0.04] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-500/50 transition-all" />
+          <button type="submit" disabled={genBusy}
+            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-all disabled:opacity-50 shrink-0">
+            {genBusy ? <Loader2 size={13} className="animate-spin" /> : <><Send size={13} /> Send Key</>}
+          </button>
+        </form>
+        {genMsg && (
+          <p className={`text-xs font-medium ${genMsg.startsWith("✓") ? "text-emerald-400" : "text-red-400"}`}>
+            {genMsg}
+          </p>
+        )}
       </div>
 
-      {/* Licenses Table */}
-      <div className="glass rounded-2xl border border-white/8 overflow-hidden">
-        <div className="flex items-center justify-between p-5 border-b border-white/8">
-          <h2 className="font-bold text-white/90 flex items-center gap-2">
-            <Key size={16} className="text-brand-400" /> Licenses
-            <span className="text-white/30 text-xs font-normal ml-1">({total} total)</span>
-          </h2>
+      {/* Users table */}
+      <div className="relative z-10 glass border border-white/8 rounded-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
+          <div className="flex items-center gap-2">
+            <Users size={14} className="text-white/40" />
+            <h2 className="font-semibold text-white/90 text-sm">Registered Users ({users.length})</h2>
+          </div>
           <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-            <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search key or email..."
-              className="bg-white/5 border border-white/10 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-white/20 focus:outline-none focus:border-brand-500/50 w-52"
-            />
+            <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/25" />
+            <input placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)}
+              className="bg-white/[0.04] border border-white/8 rounded-lg pl-7 pr-3 py-1.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-brand-500/40 w-36 transition-all" />
           </div>
         </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <RefreshCw size={20} className="animate-spin text-brand-400" />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/5 text-white/30 text-xs uppercase tracking-wider">
-                  <th className="text-left px-5 py-3">License Key</th>
-                  <th className="text-left px-5 py-3">Plan</th>
-                  <th className="text-left px-5 py-3">Email</th>
-                  <th className="text-left px-5 py-3">Jobs</th>
-                  <th className="text-left px-5 py-3">Created</th>
-                  <th className="text-left px-5 py-3">Status</th>
-                  <th className="text-left px-5 py-3">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((l) => (
-                  <tr key={l.key} className="border-b border-white/5 hover:bg-white/2 transition-colors">
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <code className="text-brand-400 text-xs">{l.key}</code>
-                        <button onClick={() => copy(l.key)} className="text-white/20 hover:text-white/50 transition-colors">
-                          {copied === l.key ? <CheckCircle2 size={12} className="text-green-400" /> : <Copy size={12} />}
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                        l.plan === "pro"
-                          ? "bg-brand-500/20 text-brand-400 border border-brand-500/30"
-                          : "bg-white/5 text-white/40 border border-white/10"
-                      }`}>{l.plan.toUpperCase()}</span>
-                    </td>
-                    <td className="px-5 py-3 text-white/50 text-xs">{l.email || "—"}</td>
-                    <td className="px-5 py-3 text-white/60 text-xs">{l.jobs_used ?? 0}</td>
-                    <td className="px-5 py-3 text-white/30 text-xs">
-                      {l.created_at ? new Date(l.created_at).toLocaleDateString() : "—"}
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex flex-col gap-1">
-                        {l.is_valid
-                          ? <span className="flex items-center gap-1 text-green-400 text-xs"><CheckCircle2 size={12} /> Active</span>
-                          : <span className="flex items-center gap-1 text-red-400 text-xs"><XCircle size={12} /> Disabled</span>}
-                        {l.device_bound
-                          ? <span className="text-yellow-500/70 text-[10px]">🔒 Device locked</span>
-                          : <span className="text-white/20 text-[10px]">○ Not activated</span>}
-                      </div>
-                    </td>
-                    <td className="px-5 py-3">
-                      <button
-                        onClick={() => toggleLicense(l.key, l.is_valid)}
-                        className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg transition-all ${
-                          l.is_valid
-                            ? "bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20"
-                            : "bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20"
-                        }`}>
-                        {l.is_valid ? <><XCircle size={11} /> Disable</> : <><CheckCircle2 size={11} /> Enable</>}
-                      </button>
-                    </td>
-                  </tr>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-white/5">
+                {["Email", "Plan", "Google", "Jobs Today", "Joined"].map(h => (
+                  <th key={h} className="px-4 py-3 text-white/25 text-xs font-semibold">{h}</th>
                 ))}
-                {filtered.length === 0 && (
-                  <tr><td colSpan={7} className="text-center py-12 text-white/25 text-sm">No licenses yet</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-3 p-4 border-t border-white/8">
-            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-              className="px-3 py-1.5 rounded-lg glass border border-white/10 text-xs text-white/50 disabled:opacity-30">Previous</button>
-            <span className="text-white/30 text-xs">Page {page} of {totalPages}</span>
-            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-              className="px-3 py-1.5 rounded-lg glass border border-white/10 text-xs text-white/50 disabled:opacity-30">Next</button>
-          </div>
-        )}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(u => (
+                <tr key={u.id} className="border-b border-white/4 hover:bg-white/[0.025] transition-colors">
+                  <td className="px-4 py-3">
+                    <div className="text-white/80 text-xs font-medium">{u.email}</div>
+                    {u.name && <div className="text-white/30 text-[11px]">{u.name}</div>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                      u.plan === "pro"
+                        ? "bg-brand-500/15 text-brand-400 border border-brand-500/25"
+                        : "bg-white/5 text-white/30 border border-white/8"
+                    }`}>{u.plan.toUpperCase()}</span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-white/40">{u.google_linked ? "✓" : "—"}</td>
+                  <td className="px-4 py-3 text-xs text-white/40">
+                    {u.daily_jobs_date === today ? u.daily_jobs_used : 0}/3
+                  </td>
+                  <td className="px-4 py-3 text-xs text-white/30">
+                    {u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr><td colSpan={5} className="px-4 py-10 text-center text-white/20 text-xs">No users found</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

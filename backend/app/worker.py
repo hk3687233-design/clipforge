@@ -39,7 +39,7 @@ def _append_product(job_id: str, product: dict):
         db.close()
 
 
-def process_video_job(job_id: str, source_url: str = None, local_path: str = None, max_clips: int = None):
+def process_video_job(job_id: str, source_url: str = None, local_path: str = None, max_clips: int = None, max_duration: int = None):
     """Full pipeline: download → analyze → clip (one at a time, saving each) → done."""
     try:
         video_path = local_path
@@ -55,6 +55,11 @@ def process_video_job(job_id: str, source_url: str = None, local_path: str = Non
         # ── Step 2: Analyze ───────────────────────────────────────────────
         _set_status(job_id, JobStatus.analyzing)
         products, duration = analyze_video(video_path, job_id, source_url=source_url)
+
+        # Free plan: reject videos longer than max_duration
+        if max_duration and duration > max_duration:
+            mins = max_duration // 60
+            raise ValueError(f"Free plan supports videos up to {mins} minutes. This video is {int(duration // 60)}m long. Upgrade to Pro for unlimited length.")
 
         if not products:
             _set_status(job_id, JobStatus.done, products=[])

@@ -3,6 +3,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 import enum
+import uuid as _uuid
 from app.config import settings
 
 engine = create_engine(settings.database_url, connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {})
@@ -19,6 +20,22 @@ class JobStatus(str, enum.Enum):
     failed = "failed"
 
 
+class User(Base):
+    """Registered user — linked to Google account or email-only."""
+    __tablename__ = "users"
+    id            = Column(String(36),  primary_key=True, default=lambda: str(_uuid.uuid4()))
+    email         = Column(String(255), unique=True, index=True, nullable=False)
+    google_id     = Column(String(100), unique=True, nullable=True, index=True)
+    name          = Column(String(255), nullable=True)
+    avatar_url    = Column(String(500), nullable=True)
+    plan          = Column(String(20),  default="free")   # free | pro
+    license_key   = Column(String(100), nullable=True)    # linked pro key
+    is_admin      = Column(Boolean,     default=False)
+    daily_jobs_used = Column(Integer,   default=0)
+    daily_jobs_date = Column(String(10), nullable=True)   # YYYY-MM-DD, resets daily
+    created_at    = Column(DateTime,    default=datetime.utcnow)
+
+
 class Job(Base):
     __tablename__ = "jobs"
     id = Column(String, primary_key=True)
@@ -27,8 +44,9 @@ class Job(Base):
     original_filename = Column(String, nullable=True)
     products = Column(JSON, default=list)
     error = Column(String, nullable=True)
-    license_key = Column(String, nullable=True)   # which license ran this job
-    plan = Column(String, default="free")          # free | pro
+    license_key = Column(String, nullable=True)
+    user_id = Column(String(36), nullable=True)           # FK to users.id
+    plan = Column(String, default="free")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -38,12 +56,12 @@ class License(Base):
     key = Column(String, primary_key=True)
     email = Column(String, nullable=True)
     is_valid = Column(Boolean, default=True)
-    plan = Column(String, default="pro")           # free | pro
-    instance_id = Column(String, nullable=True)    # Lemon Squeezy instance
+    plan = Column(String, default="pro")
+    instance_id = Column(String, nullable=True)
     order_id = Column(String, nullable=True)
     jobs_used = Column(Integer, default=0)
-    device_id = Column(String, nullable=True)      # fingerprint of first device that activated
-    activated_at = Column(DateTime, nullable=True) # when key was first activated
+    device_id = Column(String, nullable=True)
+    activated_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

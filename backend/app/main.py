@@ -5,7 +5,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from app.database import Base, engine, create_tables
-from app.routes import jobs, license
+from app.routes import jobs, license, auth
 
 # Create all DB tables on startup
 create_tables()
@@ -32,6 +32,9 @@ app.add_middleware(
 
 # Jobs routes: /api/jobs/...
 app.include_router(jobs.router, prefix="/api")
+
+# Auth routes: /api/auth/...
+app.include_router(auth.router)
 
 # License + Admin routes: /api/license/... and /api/admin/...
 app.include_router(license.router)

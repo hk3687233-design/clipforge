@@ -1,27 +1,16 @@
 import axios from "axios";
-import { getDeviceFingerprint } from "./fingerprint";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const api = axios.create({ baseURL: `${API_BASE}/api` });
 
-export async function activateLicense(key: string): Promise<{ valid: boolean; plan: string }> {
-  const device_id = getDeviceFingerprint();
-  const res = await api.post("/license/activate", { key, device_id });
-  return res.data;
-}
+const TOKEN_KEY = "clipforge_token";
 
-export async function verifyLicense(key: string): Promise<boolean> {
-  try {
-    const device_id = getDeviceFingerprint();
-    await api.post("/license/verify", { key, device_id });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function getZipDownloadUrl(jobId: string): string {
-  return `${API_BASE}/api/jobs/${jobId}/clips/download-all`;
+function _authHeaders(): Record<string, string> {
+  const token = typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
+  if (token) return { Authorization: `Bearer ${token}` };
+  // Fallback: legacy license key header (backward compat)
+  const key = typeof window !== "undefined" ? (localStorage.getItem("clipforge_license_key") || "") : "";
+  return key ? { "X-License-Key": key } : {};
 }
 
 export interface Product {
@@ -44,12 +33,8 @@ export interface Job {
 }
 
 export async function submitJob(data: FormData): Promise<{ job_id: string }> {
-  const key = typeof window !== "undefined" ? (localStorage.getItem("clipforge_license_key") || "") : "";
   const res = await api.post("/jobs/", data, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-      "X-License-Key": key,
-    },
+    headers: { "Content-Type": "multipart/form-data", ..._authHeaders() },
   });
   return res.data;
 }
@@ -57,6 +42,10 @@ export async function submitJob(data: FormData): Promise<{ job_id: string }> {
 export async function getJob(jobId: string): Promise<Job> {
   const res = await api.get(`/jobs/${jobId}`);
   return res.data;
+}
+
+export function getZipDownloadUrl(jobId: string): string {
+  return `${API_BASE}/api/jobs/${jobId}/clips/download-all`;
 }
 
 export function getClipDownloadUrl(jobId: string, filename: string): string {

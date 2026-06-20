@@ -22,7 +22,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from typing import Optional
 
-from app.database import get_db, License, Job
+from app.database import get_db, License, Job, User
 from app.config import settings
 from app.services.email import send_license_email
 
@@ -347,6 +347,57 @@ def admin_disable_license(
     lic.is_valid = False
     db.commit()
     return {"disabled": True}
+
+
+@router.get("/api/admin/users")
+def admin_list_users(
+    page: int = 1,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    _: None = Depends(_check_admin),
+):
+    total = db.query(User).count()
+    items = (
+        db.query(User)
+        .order_by(User.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "total": total,
+        "page": page,
+        "items": [
+            {
+                "id":              u.id,
+                "email":           u.email,
+                "name":            u.name,
+                "plan":            u.plan,
+                "google_linked":   bool(u.google_id),
+                "license_key":     u.license_key,
+                "is_admin":        u.is_admin,
+                "daily_jobs_used": u.daily_jobs_used,
+                "daily_jobs_date": u.daily_jobs_date,
+                "created_at":      u.created_at.isoformat() if u.created_at else None,
+            }
+            for u in items
+        ],
+    }
+
+
+@router.patch("/api/admin/users/{user_id}/set-pro")
+def admin_set_user_pro(
+    user_id: str,
+    db: Session = Depends(get_db),
+    _: None = Depends(_check_admin),
+):
+    """Manually upgrade a user to pro (for offline payments)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    user.plan = "pro"
+    db.commit()
+    return {"upgraded": True, "email": user.email}
 
 
 @router.patch("/api/admin/licenses/{key}/enable")
