@@ -1,35 +1,20 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import LicenseGate from "@/components/LicenseGate";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Scissors, CheckCircle2, Zap, Download, Shield, Play,
-  Sparkles, ArrowRight, Star, X, Lock, RefreshCw, Clock,
-  Film, Package, Link2, TrendingUp,
+  Sparkles, ArrowRight, Star, X, Lock,
+  Film, Package, Link2, TrendingUp, Clock, User,
 } from "lucide-react";
 
 const LEMON_URL = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#";
-const LICENSE_KEY = "clipforge_license_key";
 
 export default function Home() {
   const router = useRouter();
+  const { user, loading } = useAuth();
   const [videoOpen, setVideoOpen] = useState(false);
-  const [freeModal, setFreeModal] = useState(false);
-  const [freeEmail, setFreeEmail] = useState("");
-  const [freeLoading, setFreeLoading] = useState(false);
-  const [freeError, setFreeError] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
-  const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-  const [alreadyLicensed, setAlreadyLicensed] = useState(false);
-
-  useEffect(() => {
-    const saved = localStorage.getItem(LICENSE_KEY);
-    if (saved) {
-      setAlreadyLicensed(true);
-      // Auto-redirect to tool if already licensed
-      router.replace("/tool");
-    }
-  }, [router]);
 
   // Secret: 5 clicks on logo → admin
   const logoClicksRef = useRef<number[]>([]);
@@ -40,38 +25,6 @@ export default function Home() {
       logoClicksRef.current = [];
       router.push("/admin");
     }
-  };
-
-  const handleActivated = (key: string, p: string = "pro") => {
-    localStorage.setItem(LICENSE_KEY, key);
-    localStorage.setItem("clipforge_plan", p);
-    router.push("/tool");
-  };
-
-  const handleFreeSignup = async () => {
-    if (!freeEmail || !freeEmail.includes("@")) {
-      setFreeError("Please enter a valid email address");
-      return;
-    }
-    setFreeLoading(true);
-    setFreeError("");
-    try {
-      const r = await fetch(`${API}/api/license/free-signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: freeEmail }),
-      });
-      const data = await r.json();
-      if (r.ok && data.key) {
-        handleActivated(data.key, "free");
-        setFreeModal(false);
-      } else {
-        setFreeError(data.detail || "Something went wrong. Try again.");
-      }
-    } catch {
-      setFreeError("Network error. Please try again.");
-    }
-    setFreeLoading(false);
   };
 
   useEffect(() => {
@@ -95,20 +48,29 @@ export default function Home() {
           </div>
           <span className="font-bold text-lg tracking-tight">ClipForge</span>
         </button>
+
         <div className="flex items-center gap-2 sm:gap-4">
           <a href="#how-it-works" className="text-sm text-white/40 hover:text-white transition-colors hidden md:block">How it works</a>
           <a href="#pricing" className="text-sm text-white/40 hover:text-white transition-colors hidden sm:block">Pricing</a>
-          {alreadyLicensed ? (
-            <a href="/tool" className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-all glow-button">
-              <Zap size={14} /> Open Tool
-            </a>
-          ) : (
-            <>
-              <LicenseGate onActivated={handleActivated} inline />
-              <a href={LEMON_URL} className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-xl transition-all glow-button">
-                <Zap size={14} /><span className="hidden sm:inline">Get Pro — </span>$29
+
+          {!loading && (
+            user ? (
+              <a href="/tool"
+                className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-all glow-button">
+                <Zap size={14} /> Open Tool
               </a>
-            </>
+            ) : (
+              <>
+                <a href="/auth"
+                  className="text-sm text-white/50 hover:text-white transition-colors flex items-center gap-1.5 hidden sm:flex">
+                  <User size={14} /> Sign In
+                </a>
+                <a href={LEMON_URL}
+                  className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-xl transition-all glow-button">
+                  <Zap size={14} /><span className="hidden sm:inline">Get Pro — </span>$29
+                </a>
+              </>
+            )
           )}
         </div>
       </nav>
@@ -132,18 +94,14 @@ export default function Home() {
 
         {/* CTAs */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
-          <a href={LEMON_URL} className="w-full sm:w-auto flex items-center justify-center gap-3 bg-brand-600 hover:bg-brand-500 text-white font-bold px-8 py-4 rounded-2xl text-lg transition-all glow-button">
+          <a href={LEMON_URL}
+            className="w-full sm:w-auto flex items-center justify-center gap-3 bg-brand-600 hover:bg-brand-500 text-white font-bold px-8 py-4 rounded-2xl text-lg transition-all glow-button">
             <Zap size={20} /> Get Pro Lifetime — $29 <ArrowRight size={18} />
           </a>
-          <button
-            onClick={() => setVideoOpen(true)}
-            className="w-full sm:w-auto flex items-center justify-center gap-3 glass border border-white/10 hover:border-brand-500/40 text-white font-semibold px-6 py-4 rounded-2xl text-base transition-all hover:bg-brand-500/10"
-          >
-            <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center shrink-0">
-              <Play size={14} className="text-white ml-0.5" fill="white" />
-            </div>
-            Watch Demo
-          </button>
+          <a href="/auth"
+            className="w-full sm:w-auto flex items-center justify-center gap-3 glass border border-white/10 hover:border-brand-500/40 text-white font-semibold px-6 py-4 rounded-2xl text-base transition-all hover:bg-brand-500/10">
+            Start Free — No Card Needed
+          </a>
         </div>
         <div className="flex items-center justify-center gap-2 mb-2">
           <span className="line-through text-white/25 text-sm">$99</span>
@@ -224,13 +182,9 @@ export default function Home() {
             </div>
           ))}
         </div>
-
-        {/* Connector arrow on desktop */}
         <div className="hidden sm:flex items-center justify-center gap-2 mt-6 text-white/20 text-xs">
-          <span>Paste URL</span>
-          <ArrowRight size={12} />
-          <span>AI processes</span>
-          <ArrowRight size={12} />
+          <span>Paste URL</span><ArrowRight size={12} />
+          <span>AI processes</span><ArrowRight size={12} />
           <span>Download clips</span>
         </div>
       </section>
@@ -272,27 +226,9 @@ export default function Home() {
         </div>
         <div className="grid sm:grid-cols-3 gap-4">
           {[
-            {
-              name: "Marcus T.",
-              handle: "@marcustechreviews",
-              avatar: "MT",
-              badge: "Pro user",
-              review: "I used to spend 3+ hours cutting product clips from my reviews. ClipForge does it in literally 2 minutes. This is insane value for $29.",
-            },
-            {
-              name: "Priya S.",
-              handle: "@priyaunboxes",
-              avatar: "PS",
-              badge: "Pro user",
-              review: "Detected 100+ products from my 45-minute tech haul video. Every single one was accurate. The affiliate links saved me another hour of work.",
-            },
-            {
-              name: "Jake R.",
-              handle: "@jakereviews",
-              avatar: "JR",
-              badge: "Pro user",
-              review: "Bought it on a whim and it's already paid for itself 10x over. ZIP download of all clips in one click is a game changer for Reels repurposing.",
-            },
+            { name: "Marcus T.", handle: "@marcustechreviews", avatar: "MT", badge: "Pro user", review: "I used to spend 3+ hours cutting product clips from my reviews. ClipForge does it in literally 2 minutes. This is insane value for $29." },
+            { name: "Priya S.", handle: "@priyaunboxes", avatar: "PS", badge: "Pro user", review: "Detected 100+ products from my 45-minute tech haul video. Every single one was accurate. The affiliate links saved me another hour of work." },
+            { name: "Jake R.", handle: "@jakereviews", avatar: "JR", badge: "Pro user", review: "Bought it on a whim and it's already paid for itself 10x over. ZIP download of all clips in one click is a game changer for Reels repurposing." },
           ].map((r, i) => (
             <div key={i} className="glass glass-hover rounded-2xl p-6 flex flex-col gap-4 border border-white/6">
               <div className="flex items-center gap-1">
@@ -301,9 +237,7 @@ export default function Home() {
               <p className="text-white/65 text-sm leading-relaxed flex-1">"{r.review}"</p>
               <div className="flex items-center justify-between pt-3 border-t border-white/5">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-brand-600/25 border border-brand-500/30 flex items-center justify-center text-brand-400 text-xs font-bold shrink-0">
-                    {r.avatar}
-                  </div>
+                  <div className="w-9 h-9 rounded-full bg-brand-600/25 border border-brand-500/30 flex items-center justify-center text-brand-400 text-xs font-bold shrink-0">{r.avatar}</div>
                   <div>
                     <p className="text-white/80 text-xs font-semibold">{r.name}</p>
                     <p className="text-white/30 text-xs">{r.handle}</p>
@@ -338,10 +272,10 @@ export default function Home() {
               {[
                 { t: "3 video exports per day", ok: true },
                 { t: "Max 5 clips per video", ok: true },
+                { t: "Max 10-minute videos", ok: true },
                 { t: "YouTube & TikTok support", ok: true },
                 { t: "Standard quality MP4", ok: true },
                 { t: "ZIP download", ok: false },
-                { t: "Affiliate link extraction", ok: false },
                 { t: "Unlimited clips", ok: false },
               ].map((f, i) => (
                 <li key={i} className={`flex items-center gap-3 text-sm ${f.ok ? "text-white/70" : "text-white/25"}`}>
@@ -350,10 +284,10 @@ export default function Home() {
                 </li>
               ))}
             </ul>
-            <div className="flex items-center justify-center gap-2 w-full border border-white/10 text-white/30 font-semibold py-3.5 rounded-2xl text-sm cursor-not-allowed select-none">
-              <span className="w-2 h-2 rounded-full bg-yellow-500/60 inline-block" />
-              Free Plan — Coming Soon
-            </div>
+            <a href="/auth"
+              className="flex items-center justify-center gap-2 w-full glass border border-white/10 hover:border-brand-500/30 hover:bg-brand-500/5 text-white/70 hover:text-white font-semibold py-3.5 rounded-2xl text-sm transition-all">
+              Get Free Access →
+            </a>
           </div>
 
           {/* Pro Plan */}
@@ -386,13 +320,33 @@ export default function Home() {
                 </li>
               ))}
             </ul>
-            <a href={LEMON_URL} className="flex items-center justify-center gap-3 w-full bg-brand-600 hover:bg-brand-500 text-white font-bold py-4 rounded-2xl text-base transition-all glow-button">
+            <a href={LEMON_URL}
+              className="flex items-center justify-center gap-3 w-full bg-brand-600 hover:bg-brand-500 text-white font-bold py-4 rounded-2xl text-base transition-all glow-button">
               <Zap size={18} /> Get Lifetime Access — $29
             </a>
             <div className="flex items-center justify-center gap-3 mt-4 text-white/25 text-xs">
               <Shield size={11} /> Secure · Lemon Squeezy · Instant delivery
             </div>
           </div>
+        </div>
+
+        {/* After purchase guide */}
+        <div className="mt-8 max-w-3xl mx-auto glass border border-white/6 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <div className="w-9 h-9 rounded-xl bg-brand-600/15 border border-brand-500/20 flex items-center justify-center shrink-0">
+            <Lock size={15} className="text-brand-400" />
+          </div>
+          <div className="flex-1">
+            <p className="text-white/70 text-sm font-semibold mb-0.5">Already purchased?</p>
+            <p className="text-white/35 text-xs leading-relaxed">
+              After payment, your license key is emailed instantly. Sign in at{" "}
+              <a href="/auth" className="text-brand-400 hover:text-brand-300 underline">/auth</a>
+              {" "}→ "Activate Key" tab → paste your key → instant Pro access.
+            </p>
+          </div>
+          <a href="/auth"
+            className="shrink-0 flex items-center gap-2 bg-brand-600/20 hover:bg-brand-600/30 border border-brand-500/30 text-brand-400 text-xs font-bold px-4 py-2 rounded-xl transition-all">
+            Activate Key →
+          </a>
         </div>
       </section>
 
@@ -407,7 +361,8 @@ export default function Home() {
             { q: "Does it work with any video?", a: "Yes — YouTube, TikTok, Instagram Reels, and direct MP4 uploads are all supported. Best results with product review videos that have chapter markers or timestamps in the description." },
             { q: "How accurate is the product detection?", a: "For YouTube videos with chapters: 100% accurate, instant. For videos with timestamps in description: very accurate. For others: Whisper AI transcription is used as fallback — still highly accurate." },
             { q: "Do I need any API keys or subscriptions?", a: "No. ClipForge handles everything server-side — just paste a URL or upload a video and you're done. No setup, no config, no hidden requirements." },
-            { q: "What is the difference between Free and Pro?", a: "Free allows 3 videos/day with max 5 clips each. Pro is unlimited — unlimited videos, 100+ clips per video, ZIP download, affiliate link extraction, and priority processing." },
+            { q: "What is the difference between Free and Pro?", a: "Free allows 3 exports/day, max 10-minute videos, max 5 clips. Pro is unlimited — unlimited videos, 100+ clips per video, ZIP download, affiliate link extraction, and priority processing." },
+            { q: "How do I activate my license key?", a: "After purchase, check your email for the license key. Go to getclipforge.online/auth, sign in or create an account, then click 'Activate Key' tab and paste your key. Your account instantly upgrades to Pro on any device." },
             { q: "Is this a one-time purchase?", a: "Yes. Pay $29 once, use forever. No monthly fees, no renewal, no surprises. Price increases after the launch period ends." },
             { q: "Can I get a refund?", a: "Yes — 7-day no-questions-asked refund via Lemon Squeezy. Just email us and we'll process it immediately." },
           ].map((faq, i) => (
@@ -434,12 +389,14 @@ export default function Home() {
           </p>
           <p className="text-brand-400/60 text-xs mb-6 font-mono tracking-wider">getclipforge.online</p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <a href={LEMON_URL} className="w-full sm:w-auto flex items-center justify-center gap-3 bg-brand-600 hover:bg-brand-500 text-white font-bold px-10 py-4 rounded-2xl text-lg transition-all glow-button">
+            <a href={LEMON_URL}
+              className="w-full sm:w-auto flex items-center justify-center gap-3 bg-brand-600 hover:bg-brand-500 text-white font-bold px-10 py-4 rounded-2xl text-lg transition-all glow-button">
               <Zap size={20} /> Get Lifetime Access — $29
             </a>
-            <span className="w-full sm:w-auto flex items-center justify-center gap-2 text-white/20 text-sm py-4 px-6 cursor-not-allowed select-none">
-              Free tier coming soon
-            </span>
+            <a href="/auth"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 glass border border-white/10 hover:border-brand-500/30 text-white/60 hover:text-white font-semibold px-8 py-4 rounded-2xl text-base transition-all">
+              Start Free →
+            </a>
           </div>
           <p className="text-white/20 text-xs mt-6">7-day money back guarantee · No subscription · Instant delivery</p>
         </div>
@@ -448,11 +405,9 @@ export default function Home() {
       {/* ── FOOTER ─────────────────────────────────────────────── */}
       <footer className="relative z-10 border-t border-white/5 py-10">
         <div className="max-w-5xl mx-auto px-6 space-y-6">
-          {/* Disclaimer */}
           <div className="rounded-xl border border-white/6 bg-white/[0.02] px-5 py-4 text-white/30 text-xs leading-relaxed text-center">
             <strong className="text-white/45">Legal Notice:</strong> ClipForge is a neutral processing tool. Users are solely responsible for ensuring they have the necessary rights, licences, or permissions to process any video content. ClipForge does not host, store, or distribute third-party copyrighted material. Use of this tool must comply with the terms of service of the source platform and all applicable copyright laws. Intended uses include processing your own videos, licensed content, or content under fair use for review and commentary purposes.
           </div>
-
           <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-md bg-brand-600 flex items-center justify-center">
@@ -472,73 +427,24 @@ export default function Home() {
               <span>·</span>
               <a href="mailto:support@getclipforge.online" className="hover:text-white/50 transition-colors">support@getclipforge.online</a>
             </div>
-            <LicenseGate onActivated={handleActivated} />
+            <a href="/auth"
+              className="text-white/25 hover:text-white/60 text-xs transition-colors flex items-center gap-1.5">
+              <User size={12} /> Sign In / Sign Up
+            </a>
           </div>
         </div>
       </footer>
 
-      {/* ── FREE PLAN EMAIL MODAL ───────────────────────────────── */}
-      {freeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
-          onClick={() => setFreeModal(false)}>
-          <div className="relative w-full max-w-md glass rounded-3xl p-8 border border-white/10"
-            onClick={e => e.stopPropagation()}>
-            <button onClick={() => setFreeModal(false)}
-              className="absolute top-4 right-4 text-white/30 hover:text-white transition-colors">
-              <X size={18} />
-            </button>
-            <div className="text-center mb-6">
-              <div className="w-14 h-14 rounded-2xl bg-brand-600/20 border border-brand-500/20 flex items-center justify-center mx-auto mb-4">
-                <Zap size={24} className="text-brand-400" />
-              </div>
-              <h2 className="text-xl font-black mb-1">Start Free Plan</h2>
-              <p className="text-white/40 text-sm">Enter your email to get instant free access.</p>
-            </div>
-            <div className="space-y-3">
-              <input
-                type="email"
-                value={freeEmail}
-                onChange={e => setFreeEmail(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && handleFreeSignup()}
-                placeholder="your@gmail.com"
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/30 focus:outline-none focus:border-brand-500/50"
-                autoFocus
-              />
-              {freeError && <p className="text-red-400 text-xs">{freeError}</p>}
-              <button
-                onClick={handleFreeSignup}
-                disabled={freeLoading}
-                className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-all flex items-center justify-center gap-2"
-              >
-                {freeLoading ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} />}
-                {freeLoading ? "Setting up access..." : "Get Free Access →"}
-              </button>
-              <p className="text-white/25 text-xs text-center">No credit card · Instant access · 5 clips per video</p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── VIDEO MODAL ────────────────────────────────────────── */}
       {videoOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
-          onClick={() => setVideoOpen(false)}
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+          onClick={() => setVideoOpen(false)}>
           <div className="relative w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => setVideoOpen(false)}
-              className="absolute -top-12 right-0 text-white/50 hover:text-white transition-colors flex items-center gap-2 text-sm"
-            >
+            <button onClick={() => setVideoOpen(false)}
+              className="absolute -top-12 right-0 text-white/50 hover:text-white transition-colors flex items-center gap-2 text-sm">
               <X size={18} /> Close (ESC)
             </button>
-            <video
-              ref={videoRef}
-              src="/demo.mp4"
-              controls
-              autoPlay
-              className="w-full rounded-2xl shadow-2xl"
-            />
+            <video ref={videoRef} src="/demo.mp4" controls autoPlay className="w-full rounded-2xl shadow-2xl" />
           </div>
         </div>
       )}
