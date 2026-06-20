@@ -41,17 +41,9 @@ async def create_job(
     if url and not is_supported_url(url):
         raise HTTPException(400, "URL must be from TikTok, YouTube, or Instagram")
 
-    # Free plan: daily job limit check
+    # Free plan: temporarily disabled (coming soon)
     if lic.plan == "free":
-        from datetime import date
-        from app.database import Job as JobModel
-        today_start = f"{date.today()}T00:00:00"
-        today_jobs = db.query(JobModel).filter(
-            JobModel.license_key == lic.key,
-            JobModel.created_at >= today_start,
-        ).count()
-        if today_jobs >= FREE_DAILY_LIMIT:
-            raise HTTPException(429, f"Free plan limit: {FREE_DAILY_LIMIT} videos per day. Upgrade to Pro for unlimited.")
+        raise HTTPException(403, "Free plan is coming soon. Upgrade to Pro for immediate access.")
 
     job_id = str(uuid.uuid4())
     local_path = None

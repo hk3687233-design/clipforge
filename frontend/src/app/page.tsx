@@ -350,12 +350,10 @@ export default function Home() {
                 </li>
               ))}
             </ul>
-            <button
-              onClick={() => setFreeModal(true)}
-              className="flex items-center justify-center gap-3 w-full bg-white/8 hover:bg-white/12 border border-white/10 text-white font-semibold py-3.5 rounded-2xl text-sm transition-all"
-            >
-              Start for Free — Enter your email
-            </button>
+            <div className="flex items-center justify-center gap-2 w-full border border-white/10 text-white/30 font-semibold py-3.5 rounded-2xl text-sm cursor-not-allowed select-none">
+              <span className="w-2 h-2 rounded-full bg-yellow-500/60 inline-block" />
+              Free Plan — Coming Soon
+            </div>
           </div>
 
           {/* Pro Plan */}
@@ -439,9 +437,9 @@ export default function Home() {
             <a href={LEMON_URL} className="w-full sm:w-auto flex items-center justify-center gap-3 bg-brand-600 hover:bg-brand-500 text-white font-bold px-10 py-4 rounded-2xl text-lg transition-all glow-button">
               <Zap size={20} /> Get Lifetime Access — $29
             </a>
-            <button onClick={() => setFreeModal(true)} className="w-full sm:w-auto flex items-center justify-center gap-2 text-white/40 hover:text-white/70 text-sm transition-colors py-4 px-6">
-              Or start free →
-            </button>
+            <span className="w-full sm:w-auto flex items-center justify-center gap-2 text-white/20 text-sm py-4 px-6 cursor-not-allowed select-none">
+              Free tier coming soon
+            </span>
           </div>
           <p className="text-white/20 text-xs mt-6">7-day money back guarantee · No subscription · Instant delivery</p>
         </div>

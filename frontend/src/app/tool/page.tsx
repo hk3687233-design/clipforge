@@ -101,7 +101,25 @@ export default function ToolPage() {
         </div>
 
         <div className="w-full max-w-2xl">
-          {!jobId
+          {plan === "free" ? (
+            <div className="glass border border-white/10 rounded-3xl p-10 text-center space-y-5">
+              <div className="w-14 h-14 rounded-2xl bg-brand-600/20 border border-brand-500/30 flex items-center justify-center mx-auto">
+                <Zap size={24} className="text-brand-400" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-bold text-white">Free Plan — Coming Soon</h2>
+                <p className="text-white/40 text-sm max-w-sm mx-auto">
+                  The free tier is not available yet. Upgrade to Pro to get full access right now.
+                </p>
+              </div>
+              <a
+                href={LEMON_URL}
+                className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white font-bold px-6 py-3 rounded-2xl transition-all glow-button text-sm"
+              >
+                <Zap size={14} /> Get Pro — $29 Lifetime
+              </a>
+            </div>
+          ) : !jobId
             ? <Uploader onJobCreated={setJobId} />
             : <JobPoller jobId={jobId} onReset={() => setJobId(null)} plan={plan} />
           }
