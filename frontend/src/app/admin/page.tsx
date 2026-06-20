@@ -1,12 +1,12 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import axios from "axios";
 import {
   Scissors, Users, Key, Send, Loader2, RefreshCw, LogOut,
   Search, Crown, ShieldOff, User,
 } from "lucide-react";
+
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const ADMIN_KEY = "clipforge_admin_secret";
@@ -24,8 +24,7 @@ interface Stats {
 type Tab = "all" | "free" | "pro";
 
 export default function AdminPage() {
-  const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
 
   const [secret, setSecret]     = useState("");
   const [authed, setAuthed]     = useState(false);
@@ -39,10 +38,6 @@ export default function AdminPage() {
   const [genBusy,  setGenBusy]  = useState(false);
   const [genMsg,   setGenMsg]   = useState("");
   const [planBusy, setPlanBusy] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!authLoading && !user) router.replace("/auth");
-  }, [user, authLoading, router]);
 
   const load = useCallback(async (sec: string) => {
     setLoading(true); setError("");
@@ -106,26 +101,6 @@ export default function AdminPage() {
     }
     return true;
   });
-
-  // Loading auth
-  if (authLoading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <Loader2 size={22} className="text-brand-500 animate-spin" />
-    </div>
-  );
-
-  if (!user) return null;
-
-  // Not admin
-  if (!user.is_admin) return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="text-center space-y-3">
-        <ShieldOff size={32} className="text-red-400 mx-auto" />
-        <p className="text-white/60 text-sm">Access denied — admin only</p>
-        <a href="/tool" className="text-brand-400 hover:text-brand-300 text-xs underline">← Back to tool</a>
-      </div>
-    </div>
-  );
 
   // Admin secret prompt
   if (!authed) return (

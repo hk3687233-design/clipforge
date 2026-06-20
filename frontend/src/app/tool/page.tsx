@@ -4,14 +4,21 @@ import { useRouter } from "next/navigation";
 import Uploader from "@/components/Uploader";
 import JobPoller from "@/components/JobPoller";
 import { useAuth } from "@/contexts/AuthContext";
-import { Scissors, Zap, Lock, Loader2, User, Key } from "lucide-react";
+import { Scissors, Zap, Lock, Loader2, User, Key, X, CheckCircle2, AlertCircle } from "lucide-react";
 
 const LEMON_URL = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#";
 
 export default function ToolPage() {
   const router = useRouter();
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, activateKey } = useAuth();
   const [jobId, setJobId] = useState<string | null>(null);
+
+  // Activate key modal
+  const [showActivate, setShowActivate] = useState(false);
+  const [keyInput, setKeyInput]         = useState("");
+  const [keyBusy, setKeyBusy]           = useState(false);
+  const [keyError, setKeyError]         = useState("");
+  const [keySuccess, setKeySuccess]     = useState("");
 
   useEffect(() => {
     if (loading) return;
@@ -25,6 +32,19 @@ export default function ToolPage() {
   );
 
   const plan = user.plan;
+
+  const handleActivate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!keyInput.trim()) return;
+    setKeyBusy(true); setKeyError(""); setKeySuccess("");
+    try {
+      const msg = await activateKey(keyInput.trim().toUpperCase());
+      setKeySuccess(msg);
+      setTimeout(() => { setShowActivate(false); setKeyInput(""); setKeySuccess(""); }, 1800);
+    } catch (err: any) {
+      setKeyError(err?.response?.data?.detail || "Invalid key. Check and try again.");
+    } finally { setKeyBusy(false); }
+  };
 
   return (
     <div className="min-h-screen relative overflow-hidden">
@@ -55,7 +75,7 @@ export default function ToolPage() {
             {plan === "free" && (
               <a href={LEMON_URL}
                 className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all glow-button">
-                <Zap size={12} /><span className="hidden sm:inline">Upgrade to Pro — </span>$29
+                <Zap size={12} /><span className="hidden sm:inline">Upgrade — </span>$29
               </a>
             )}
             <div className="flex items-center gap-2">
@@ -86,9 +106,11 @@ export default function ToolPage() {
                 <Lock size={12} /> Free plan: 3 exports/day · max 10 min · 5 clips ·{" "}
                 <a href={LEMON_URL} className="underline underline-offset-2 font-bold">Upgrade for unlimited</a>
               </div>
-              <a href="/auth" className="flex items-center gap-1.5 text-white/25 hover:text-brand-400 text-xs transition-colors">
+              <button
+                onClick={() => { setShowActivate(true); setKeyError(""); setKeySuccess(""); }}
+                className="flex items-center gap-1.5 text-white/25 hover:text-brand-400 text-xs transition-colors">
                 <Key size={11} /> Have a license key? Activate it →
-              </a>
+              </button>
             </div>
           )}
         </div>
@@ -108,6 +130,54 @@ export default function ToolPage() {
           <span>Direct Upload</span>
         </p>
       </div>
+
+      {/* Activate Key Modal */}
+      {showActivate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4"
+          onClick={() => setShowActivate(false)}>
+          <div className="w-full max-w-sm glass border border-white/10 rounded-3xl p-7 space-y-5"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Key size={16} className="text-brand-400" />
+                <h2 className="font-bold text-white text-base">Activate License Key</h2>
+              </div>
+              <button onClick={() => setShowActivate(false)}
+                className="text-white/30 hover:text-white transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <p className="text-white/40 text-xs leading-relaxed">
+              Enter your Pro license key to unlock unlimited access on this account.
+            </p>
+            <form onSubmit={handleActivate} className="space-y-3">
+              <input
+                type="text"
+                placeholder="CF-PRO-XXXXXX-XXXXXX-XXXXXX"
+                value={keyInput}
+                onChange={e => setKeyInput(e.target.value)}
+                className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-500/50 font-mono tracking-wider uppercase transition-all"
+                autoFocus
+                required
+              />
+              <button type="submit" disabled={keyBusy}
+                className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-all text-sm flex items-center justify-center gap-2">
+                {keyBusy ? <Loader2 size={14} className="animate-spin" /> : <><Key size={14} /> Activate Key</>}
+              </button>
+            </form>
+            {keyError && (
+              <div className="flex items-center gap-2 text-red-400 text-xs">
+                <AlertCircle size={13} className="shrink-0" />{keyError}
+              </div>
+            )}
+            {keySuccess && (
+              <div className="flex items-center gap-2 text-emerald-400 text-xs">
+                <CheckCircle2 size={13} className="shrink-0" />{keySuccess}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
