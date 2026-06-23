@@ -222,10 +222,32 @@ def get_job(
     }
 
 
+def _check_job_access(job_id: str, authorization: Optional[str], db: Session):
+    """Verify the requester owns the job (if it has a user_id)."""
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        return
+    if job.user_id and authorization and authorization.startswith("Bearer "):
+        from app.services.auth_service import decode_token
+        try:
+            payload = decode_token(authorization.removeprefix("Bearer ").strip())
+            if payload.get("sub") != job.user_id and not payload.get("admin"):
+                raise HTTPException(403, "Access denied")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+
 # ── Clip downloads ──────────────────────────────────────────────────────────
 
 @router.get("/{job_id}/clips/download-all")
-def download_all_clips(job_id: str):
+def download_all_clips(
+    job_id: str,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    _check_job_access(job_id, authorization, db)
     clips_dir = os.path.join(settings.temp_dir, job_id, "clips")
     if not os.path.exists(clips_dir):
         raise HTTPException(404, "No clips found for this job")
@@ -254,7 +276,13 @@ def download_all_clips(job_id: str):
 
 
 @router.get("/{job_id}/clips/{filename}")
-def download_clip(job_id: str, filename: str):
+def download_clip(
+    job_id: str,
+    filename: str,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    _check_job_access(job_id, authorization, db)
     safe_name = os.path.basename(filename)
     if not safe_name or safe_name != filename:
         raise HTTPException(400, "Invalid filename")

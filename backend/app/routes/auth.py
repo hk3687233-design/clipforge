@@ -24,9 +24,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db, User, License
+import logging
 from app.config import settings
 from app.services.auth_service import create_token, get_current_user
 from app.services.email import send_password_reset_email, send_welcome_email
+
+logger = logging.getLogger("clipforge.auth")
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -179,8 +182,8 @@ def auth_signup(req: SignupRequest, db: Session = Depends(get_db)):
 
     try:
         send_welcome_email(email, first)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Welcome email failed for {email}: {e}")
 
     return {"message": "Account created! You can now sign in."}
 
@@ -327,8 +330,8 @@ def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
 
         try:
             send_password_reset_email(email, token)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Password reset email failed for {email}: {e}")
 
     return {"message": "If an account exists with this email, you'll receive a password reset link."}
 

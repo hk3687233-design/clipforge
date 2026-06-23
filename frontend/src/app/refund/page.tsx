@@ -1,6 +1,6 @@
 import { Scissors, CheckCircle2, Mail, Clock, Shield } from "lucide-react";
 
-export const metadata = { title: "Refund Policy — ClipForge" };
+export const metadata = { title: "Refund Policy — ClipForge", description: "ClipForge 7-day money-back guarantee. No questions asked refund policy." };
 
 export default function RefundPolicy() {
   return (

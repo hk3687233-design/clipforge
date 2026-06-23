@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/components/Toast";
 import axios from "axios";
 import {
   Scissors, Users, Key, Send, Loader2, RefreshCw, LogOut,
@@ -23,6 +24,7 @@ type UserTab = "all" | "free" | "pro";
 
 export default function AdminPage() {
   const { user } = useAuth();
+  const { toast } = useToast();
 
   const [secret, setSecret]       = useState("");
   const [authed, setAuthed]       = useState(false);
@@ -116,7 +118,7 @@ export default function AdminPage() {
       if (type === "user") setUsers(prev => prev.filter(u => u.id !== id));
       else setLicenses(prev => prev.filter(l => l.key !== id));
     } catch (e: any) {
-      alert(e?.response?.data?.detail || "Delete failed");
+      toast(e?.response?.data?.detail || "Delete failed", "error");
     } finally { setDelBusy(null); setDelConfirm(null); }
   };
 

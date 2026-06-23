@@ -1,6 +1,6 @@
 import { Scissors } from "lucide-react";
 
-export const metadata = { title: "Terms of Service — ClipForge" };
+export const metadata = { title: "Terms of Service — ClipForge", description: "Terms and conditions for using ClipForge — license, acceptable use, payments." };
 
 export default function TermsOfService() {
   return (

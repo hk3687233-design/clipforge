@@ -1,6 +1,6 @@
 import { Scissors } from "lucide-react";
 
-export const metadata = { title: "Privacy Policy — ClipForge" };
+export const metadata = { title: "Privacy Policy — ClipForge", description: "How ClipForge collects, uses, and protects your data. GDPR compliant." };
 
 export default function PrivacyPolicy() {
   return (

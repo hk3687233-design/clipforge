@@ -5,6 +5,7 @@ Smart product segment detector — 3-tier strategy:
   3. faster-whisper    → AI transcription fallback (3-min timeout)
   Fallback: silence detection (if Whisper times out/errors)
 """
+import logging
 import subprocess
 import os
 import json
@@ -12,6 +13,8 @@ import re
 import yt_dlp
 from typing import List, Dict, Tuple, Optional
 from app.config import settings
+
+logger = logging.getLogger("clipforge.analyzer")
 
 
 def _p(path: str) -> str:
@@ -95,7 +98,7 @@ def _get_yt_metadata(url: str) -> Optional[Dict]:
     clean = _normalize_yt_url(url)
     vid_id = re.search(r"v=([a-zA-Z0-9_-]{11})", clean)
     vid_id = vid_id.group(1) if vid_id else None
-    print(f"[analyzer] fetching metadata  id={vid_id}")
+    logger.info(f"[analyzer] fetching metadata  id={vid_id}")
 
     # ── Attempt 1: yt-dlp with cookies ───────────────────────────────
     cookies_file = None
@@ -122,21 +125,21 @@ def _get_yt_metadata(url: str) -> Optional[Dict]:
                 info = ydl.extract_info(clean, download=False)
             ch   = info.get("chapters") or []
             desc = info.get("description") or ""
-            print(f"[analyzer] yt-dlp metadata ok: chapters={len(ch)} desc={len(desc)}")
+            logger.info(f"[analyzer] yt-dlp metadata ok: chapters={len(ch)} desc={len(desc)}")
             if cookies_file:
                 try: os.unlink(cookies_file)
-                except: pass
+                except Exception: pass
             return info
         except Exception as e:
-            print(f"[analyzer] yt-dlp metadata failed ({client}): {str(e)[:100]}")
+            logger.info(f"[analyzer] yt-dlp metadata failed ({client}): {str(e)[:100]}")
 
     if cookies_file:
         try: os.unlink(cookies_file)
-        except: pass
+        except Exception: pass
 
     # ── Attempt 2: Invidious API — ALL instances in parallel ─────────
     if not vid_id:
-        print("[analyzer] no video ID — cannot use Invidious")
+        logger.info("[analyzer] no video ID — cannot use Invidious")
         return None
 
     # Build instance list + optionally enrich from api.invidious.io
@@ -158,7 +161,7 @@ def _get_yt_metadata(url: str) -> Optional[Dict]:
     except Exception:
         pass
 
-    print(f"[analyzer] Invidious parallel fetch: {len(instances)} instances")
+    logger.info(f"[analyzer] Invidious parallel fetch: {len(instances)} instances")
     result: Optional[Dict] = None
 
     with ThreadPoolExecutor(max_workers=len(instances)) as ex:
@@ -169,14 +172,14 @@ def _get_yt_metadata(url: str) -> Optional[Dict]:
             if data:
                 result = data
                 inst   = data.pop("_instance", "?")
-                print(f"[analyzer] Invidious ✓ {inst}  "
+                logger.info(f"[analyzer] Invidious ✓ {inst}  "
                       f"chapters={len(data['chapters'])} desc={len(data['description'])}")
                 for f in futs:
                     f.cancel()
                 break
 
     if not result:
-        print("[analyzer] all Invidious instances failed")
+        logger.info("[analyzer] all Invidious instances failed")
 
     return result
 
@@ -257,7 +260,7 @@ def _chapters_to_products(chapters: List[Dict], description: str, duration: floa
     last = raw[-1]
     # Last chapter end = start + avg, clamped to video duration
     last["end"] = min(round(last["start"] + avg_dur, 2), duration)
-    print(f"[analyzer] last chapter '{last['title']}': "
+    logger.info(f"[analyzer] last chapter '{last['title']}': "
           f"{last['start']:.0f}s → {last['end']:.0f}s  ({last['end']-last['start']:.0f}s, avg={avg_dur:.0f}s)")
 
     products = []
@@ -273,7 +276,7 @@ def _chapters_to_products(chapters: List[Dict], description: str, duration: floa
             "affiliate_url": _match_link(r["title"], aff),
         })
 
-    print(f"[analyzer] Tier1 chapters={len(products)}  links={sum(1 for p in products if p['affiliate_url'])}")
+    logger.info(f"[analyzer] Tier1 chapters={len(products)}  links={sum(1 for p in products if p['affiliate_url'])}")
     return products
 
 
@@ -350,7 +353,7 @@ def _parse_description_timestamps(description: str, duration: float) -> List[Dic
             "affiliate_url": link,
         })
 
-    print(f"[analyzer] Tier2 segments={len(products)}  links={sum(1 for p in products if p['affiliate_url'])}")
+    logger.info(f"[analyzer] Tier2 segments={len(products)}  links={sum(1 for p in products if p['affiliate_url'])}")
     return products
 
 
@@ -503,7 +506,7 @@ def _gemini_from_transcript(words: List[Dict], description: str, duration: float
     try:
         import google.generativeai as genai
     except ImportError:
-        print("[analyzer] google-generativeai not installed — skipping Gemini")
+        logger.info("[analyzer] google-generativeai not installed — skipping Gemini")
         return []
 
     # Build compressed timestamped transcript (~10-second chunks)
@@ -585,11 +588,11 @@ Rules:
                 "affiliate_url": str(p.get("affiliate_url", "")),
             })
 
-        print(f"[analyzer] Gemini → {len(products)} products")
+        logger.info(f"[analyzer] Gemini → {len(products)} products")
         return products
 
     except Exception as e:
-        print(f"[analyzer] Gemini error: {str(e)[:120]}")
+        logger.info(f"[analyzer] Gemini error: {str(e)[:120]}")
         return []
 
 
@@ -608,7 +611,7 @@ def analyze_video(video_path: str, job_id: str, source_url: str = None) -> Tuple
     """
     duration    = _get_duration(video_path)
     description = ""  # shared across tiers
-    print(f"[analyzer] duration={duration:.1f}s  url={source_url or 'upload'}")
+    logger.info(f"[analyzer] duration={duration:.1f}s  url={source_url or 'upload'}")
 
     # ── Tier 1: YouTube chapters ──────────────────────────────────────
     if source_url:
@@ -620,20 +623,20 @@ def analyze_video(video_path: str, job_id: str, source_url: str = None) -> Tuple
             if chapters:
                 products = _chapters_to_products(chapters, description, duration)
                 if products:
-                    print(f"[analyzer] ✅ Tier1 → {len(products)} products")
+                    logger.info(f"[analyzer] ✅ Tier1 → {len(products)} products")
                     return products, duration
 
             # ── Tier 2: Description timestamps ───────────────────────
             if description:
                 products = _parse_description_timestamps(description, duration)
                 if products:
-                    print(f"[analyzer] ✅ Tier2 → {len(products)} products")
+                    logger.info(f"[analyzer] ✅ Tier2 → {len(products)} products")
                     return products, duration
             else:
-                print("[analyzer] description empty — skipping Tier2")
+                logger.info("[analyzer] description empty — skipping Tier2")
 
     # ── Tier 3/4: faster-whisper ──────────────────────────────────────
-    print("[analyzer] Tier3: faster-whisper transcription")
+    logger.info("[analyzer] Tier3: faster-whisper transcription")
     try:
         audio_path = _extract_audio(video_path, job_id)
         words      = _transcribe_whisper(audio_path)
@@ -645,20 +648,20 @@ def analyze_video(video_path: str, job_id: str, source_url: str = None) -> Tuple
         # ── Tier 3: Gemini Flash (free, intelligent) ──────────────────
         products = _gemini_from_transcript(words, description, duration)
         if products:
-            print(f"[analyzer] ✅ Tier3-Gemini → {len(products)} products")
+            logger.info(f"[analyzer] ✅ Tier3-Gemini → {len(products)} products")
             return products, duration
 
         # ── Tier 4: Whisper transition-word detection ─────────────────
         products = _whisper_to_products(words, video_path, duration)
-        print(f"[analyzer] ✅ Tier4-Whisper → {len(products)} products")
+        logger.info(f"[analyzer] ✅ Tier4-Whisper → {len(products)} products")
         return products, duration
 
     except TimeoutError as e:
-        print(f"[analyzer] ⚠️  {e} → silence fallback")
+        logger.info(f"[analyzer] ⚠️  {e} → silence fallback")
     except Exception as e:
-        print(f"[analyzer] ⚠️  Whisper error: {e} → silence fallback")
+        logger.info(f"[analyzer] ⚠️  Whisper error: {e} → silence fallback")
 
     # ── Silence fallback ──────────────────────────────────────────────
     products = _silence_segments(video_path, duration)
-    print(f"[analyzer] ✅ Silence fallback → {len(products)} products")
+    logger.info(f"[analyzer] ✅ Silence fallback → {len(products)} products")
     return products, duration

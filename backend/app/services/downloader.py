@@ -2,6 +2,7 @@
 Video downloader — YouTube via Invidious proxy (Railway IP bypassed),
 TikTok/Instagram/Facebook via yt-dlp.
 """
+import logging
 import yt_dlp
 import os
 import re
@@ -10,6 +11,8 @@ import tempfile
 import requests as _req
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.config import settings
+
+logger = logging.getLogger("clipforge.downloader")
 
 SUPPORTED_DOMAINS = [
     "tiktok.com", "youtube.com", "youtu.be",
@@ -164,7 +167,7 @@ def _try_1080p_invidious(instance: str, video_id: str, out_dir: str) -> str | No
             out_path, "-y", "-loglevel", "error",
         ], capture_output=True, timeout=300)
         if result.returncode == 0 and os.path.getsize(out_path) > 100_000:
-            print(f"[invidious] ✓ 1080p merged from {instance}")
+            logger.info(f"[invidious] ✓ 1080p merged from {instance}")
             return out_path
         if os.path.exists(out_path):
             os.unlink(out_path)
@@ -196,7 +199,7 @@ def _download_from_invidious(video_id: str, out_dir: str) -> str | None:
     except Exception:
         pass
 
-    print(f"[invidious] probing {len(instances)} instances in parallel…")
+    logger.info(f"[invidious] probing {len(instances)} instances in parallel…")
 
     working_url: str | None = None
 
@@ -208,14 +211,14 @@ def _download_from_invidious(video_id: str, out_dir: str) -> str | None:
             result = fut.result()
             if result:
                 working_url = result
-                print(f"[invidious] ✓ alive: {futs[fut]}")
+                logger.info(f"[invidious] ✓ alive: {futs[fut]}")
                 # Cancel remaining (best-effort)
                 for f in futs:
                     f.cancel()
                 break
 
     if not working_url:
-        print("[invidious] all instances failed probe")
+        logger.info("[invidious] all instances failed probe")
         return None
 
     # Extract instance from winning URL and try 1080p first
@@ -226,14 +229,14 @@ def _download_from_invidious(video_id: str, out_dir: str) -> str | None:
 
     # Fall back to 720p/360p combined stream
     out_path = os.path.join(out_dir, "source.mp4")
-    print(f"[invidious] downloading 720p: {working_url[:70]}…")
+    logger.info(f"[invidious] downloading 720p: {working_url[:70]}…")
     size = _stream_to_file(working_url, out_path, connect_timeout=10, read_timeout=300)
     if size > 100_000:
-        print(f"[invidious] ✓ downloaded {size // 1024} KB")
+        logger.info(f"[invidious] ✓ downloaded {size // 1024} KB")
         return out_path
     if os.path.exists(out_path):
         os.unlink(out_path)
-    print(f"[invidious] download too small ({size} B)")
+    logger.info(f"[invidious] download too small ({size} B)")
     return None
 
 
@@ -260,15 +263,15 @@ def _download_from_piped(video_id: str, out_dir: str) -> str | None:
             if not stream_url:
                 continue
             out_path = os.path.join(out_dir, "source.mp4")
-            print(f"[piped] downloading from {instance}")
+            logger.info(f"[piped] downloading from {instance}")
             size = _stream_to_file(stream_url, out_path)
             if size > 100_000:
-                print(f"[piped] ✓ {size // 1024} KB")
+                logger.info(f"[piped] ✓ {size // 1024} KB")
                 return out_path
             if os.path.exists(out_path):
                 os.unlink(out_path)
         except Exception as e:
-            print(f"[piped] {instance}: {str(e)[:60]}")
+            logger.info(f"[piped] {instance}: {str(e)[:60]}")
     return None
 
 
@@ -276,7 +279,7 @@ def _download_from_piped(video_id: str, out_dir: str) -> str | None:
 
 def download_video(url: str, job_id: str) -> str:
     url = _normalize_url(url)
-    print(f"[downloader] url={url}")
+    logger.info(f"[downloader] url={url}")
 
     out_dir = os.path.join(settings.temp_dir, job_id)
     os.makedirs(out_dir, exist_ok=True)
@@ -302,7 +305,7 @@ def download_video(url: str, job_id: str) -> str:
             if path:
                 _cleanup(cookies_file)
                 return path
-            print("[youtube] Invidious failed → trying Piped")
+            logger.info("[youtube] Invidious failed → trying Piped")
 
         # 2. Piped.video ──────────────────────────────────────────────────
         if video_id:
@@ -310,7 +313,7 @@ def download_video(url: str, job_id: str) -> str:
             if path:
                 _cleanup(cookies_file)
                 return path
-            print("[youtube] Piped failed → trying yt-dlp")
+            logger.info("[youtube] Piped failed → trying yt-dlp")
 
         # 3. yt-dlp (works outside Railway, kept as safety net) ───────────
         out_tmpl = os.path.join(out_dir, "source.%(ext)s")
@@ -337,15 +340,15 @@ def download_video(url: str, job_id: str) -> str:
         last_err = None
         for i, opts in enumerate(attempts, 1):
             client = opts["extractor_args"]["youtube"]["player_client"][0]
-            print(f"[yt-dlp] attempt {i}/{len(attempts)} client={client}")
+            logger.info(f"[yt-dlp] attempt {i}/{len(attempts)} client={client}")
             try:
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     ydl.download([url])
-                print(f"[yt-dlp] ✓ attempt {i}")
+                logger.info(f"[yt-dlp] ✓ attempt {i}")
                 last_err = None
                 break
             except Exception as e:
-                print(f"[yt-dlp] ✗ {str(e)[:100]}")
+                logger.info(f"[yt-dlp] ✗ {str(e)[:100]}")
                 last_err = e
 
         if last_err:
@@ -376,14 +379,14 @@ def download_video(url: str, job_id: str) -> str:
         last_err = None
         plat = "tiktok" if is_tiktok else "instagram" if is_instagram else "facebook"
         for i, opts in enumerate(attempts, 1):
-            print(f"[{plat}] attempt {i}/{len(attempts)}")
+            logger.info(f"[{plat}] attempt {i}/{len(attempts)}")
             try:
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     ydl.download([url])
                 last_err = None
                 break
             except Exception as e:
-                print(f"[{plat}] ✗ {str(e)[:100]}")
+                logger.info(f"[{plat}] ✗ {str(e)[:100]}")
                 last_err = e
 
         if last_err:

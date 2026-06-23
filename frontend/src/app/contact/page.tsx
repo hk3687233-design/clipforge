@@ -1,4 +1,10 @@
+import type { Metadata } from "next";
 import { Scissors, ArrowLeft, Mail, Clock, Shield } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Contact Support — ClipForge",
+  description: "Get help with ClipForge — email support, response times, and refund information.",
+};
 
 export default function ContactPage() {
   return (

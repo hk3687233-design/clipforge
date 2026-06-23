@@ -1,4 +1,10 @@
+import type { Metadata } from "next";
 import { Scissors, ArrowLeft } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "FAQ — ClipForge",
+  description: "Frequently asked questions about ClipForge — pricing, features, refunds, and how it works.",
+};
 
 const faqs = [
   { q: "Does it work with any video?", a: "Yes — YouTube, TikTok, Instagram Reels, and direct MP4 uploads are all supported. Best results with product review videos that have chapter markers or timestamps in the description." },
