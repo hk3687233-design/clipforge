@@ -37,7 +37,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="shortcut icon" href="/favicon.svg" />
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/favicon.svg" />
         <meta name="theme-color" content="#7c3aed" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body>
         <Providers>{children}</Providers>

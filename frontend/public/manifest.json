@@ -1,0 +1,16 @@
+{
+  "name": "ClipForge",
+  "short_name": "ClipForge",
+  "description": "AI-powered product clip extractor. Turn any review video into product clips automatically.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

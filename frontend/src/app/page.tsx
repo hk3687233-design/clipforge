@@ -500,7 +500,7 @@ export default function Home() {
               {[
                 { label: "Features", href: "#features" },
                 { label: "How it Works", href: "#how-it-works" },
-                { label: "Pricing", href: "#pricing" },
+                { label: "Pricing", href: "/pricing" },
                 { label: "Open Tool", href: "/tool" },
                 { label: "Sign In", href: "/auth" },
               ].map(l => (
@@ -524,8 +524,8 @@ export default function Home() {
             <div className="space-y-3">
               <p className="text-white/60 text-xs font-bold uppercase tracking-widest mb-4">Support</p>
               {[
-                { label: "FAQ", href: "#faq" },
-                { label: "Contact Us", href: "mailto:support@getclipforge.online" },
+                { label: "FAQ", href: "/faq" },
+                { label: "Contact Us", href: "/contact" },
                 { label: "Activate License", href: "/auth" },
                 { label: "Get Pro — $29", href: LEMON_URL },
               ].map(l => (
