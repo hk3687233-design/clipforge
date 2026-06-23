@@ -1,11 +1,13 @@
 """
 Auth routes:
-  POST /api/auth/signup        — email+password signup (new users)
-  POST /api/auth/login         — email+password login
-  POST /api/auth/google        — Google OAuth login/signup
-  GET  /api/auth/me            — get current user
-  POST /api/auth/activate      — link pro license key to user account
-  POST /api/auth/set-password  — set/update password (for Google users)
+  POST /api/auth/signup           — email+password signup (new users)
+  POST /api/auth/login            — email+password login
+  POST /api/auth/google           — Google OAuth login/signup
+  GET  /api/auth/me               — get current user
+  POST /api/auth/activate         — link pro license key to user account
+  POST /api/auth/set-password     — set/update password (for Google users)
+  POST /api/auth/forgot-password  — request password reset email
+  POST /api/auth/reset-password   — reset password with token
 """
 import re
 import uuid
@@ -13,7 +15,8 @@ import os
 import hmac
 import hashlib
 import base64
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -23,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db, User, License
 from app.config import settings
 from app.services.auth_service import create_token, get_current_user
+from app.services.email import send_password_reset_email, send_welcome_email
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -64,6 +68,13 @@ class ActivateKeyRequest(BaseModel):
     key: str
 
 class SetPasswordRequest(BaseModel):
+    password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
     password: str
 
 
@@ -157,6 +168,12 @@ def auth_signup(req: SignupRequest, db: Session = Depends(get_db)):
     )
     db.add(user)
     db.commit()
+
+    try:
+        send_welcome_email(email, first)
+    except Exception:
+        pass
+
     return {"message": "Account created! You can now sign in."}
 
 
@@ -286,3 +303,47 @@ def activate_key(
         "plan":    user.plan,
         "message": f"Activated — you now have {user.plan.upper()} access!",
     }
+
+
+@router.post("/forgot-password")
+def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """Send password reset email. Always returns 200 to avoid email enumeration."""
+    email = req.email.strip().lower()
+    user = db.query(User).filter(User.email == email).first()
+
+    if user and user.password_hash:
+        token = secrets.token_urlsafe(32)
+        user.password_reset_token = token
+        user.password_reset_expires = datetime.utcnow() + timedelta(hours=1)
+        db.commit()
+
+        try:
+            send_password_reset_email(email, token)
+        except Exception:
+            pass
+
+    return {"message": "If an account exists with this email, you'll receive a password reset link."}
+
+
+@router.post("/reset-password")
+def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Reset password using a valid token."""
+    if len(req.password.strip()) < 6:
+        raise HTTPException(400, "Password must be at least 6 characters")
+
+    user = db.query(User).filter(User.password_reset_token == req.token).first()
+    if not user:
+        raise HTTPException(400, "Invalid or expired reset link. Please request a new one.")
+
+    if not user.password_reset_expires or user.password_reset_expires < datetime.utcnow():
+        user.password_reset_token = None
+        user.password_reset_expires = None
+        db.commit()
+        raise HTTPException(400, "Reset link has expired. Please request a new one.")
+
+    user.password_hash = _hash_password(req.password.strip())
+    user.password_reset_token = None
+    user.password_reset_expires = None
+    db.commit()
+
+    return {"message": "Password updated successfully! You can now sign in."}

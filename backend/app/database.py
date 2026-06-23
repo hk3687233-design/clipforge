@@ -36,6 +36,9 @@ class User(Base):
     is_admin      = Column(Boolean,     default=False)
     daily_jobs_used = Column(Integer,   default=0)
     daily_jobs_date = Column(String(10), nullable=True)   # YYYY-MM-DD, resets daily
+    email_verified  = Column(Boolean,   default=False)
+    password_reset_token   = Column(String(100), nullable=True)
+    password_reset_expires = Column(DateTime, nullable=True)
     created_at    = Column(DateTime,    default=datetime.utcnow)
 
 
@@ -88,6 +91,9 @@ def run_migrations():
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(100)",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(100)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMP",
             ]
             for stmt in stmts:
                 try:

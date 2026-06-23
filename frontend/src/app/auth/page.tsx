@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { GoogleLogin } from "@react-oauth/google";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -8,11 +8,13 @@ import {
   User, Lock, Eye, EyeOff,
 } from "lucide-react";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const LEMON_URL = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#";
-type Mode = "login" | "signup" | "signup-success" | "set-password";
+type Mode = "login" | "signup" | "signup-success" | "set-password" | "forgot-password";
 
-export default function AuthPage() {
+function AuthPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading, loginWithGoogle, loginWithEmail, signupWithEmail, setPassword } = useAuth();
 
   const [mode, setMode]           = useState<Mode>("login");
@@ -34,6 +36,9 @@ export default function AuthPage() {
 
   // Set-password field
   const [newPass, setNewPass] = useState("");
+
+  // Forgot password field
+  const [forgotEmail, setForgotEmail] = useState("");
 
   // Redirect if already logged in (with password set)
   useEffect(() => {
@@ -111,6 +116,21 @@ export default function AuthPage() {
     } finally { setBusy(false); }
   };
 
+  // ── Forgot password ────────────────────────────────────────────────────────
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault(); clear();
+    if (!forgotEmail.trim()) return;
+    setBusy(true);
+    try {
+      const res = await import("axios").then(m =>
+        m.default.post(`${API_BASE}/api/auth/forgot-password`, { email: forgotEmail.trim() })
+      );
+      setSuccess(res.data.message || "Check your email for a reset link.");
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Something went wrong. Try again.");
+    } finally { setBusy(false); }
+  };
+
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
   return (
@@ -185,9 +205,57 @@ export default function AuthPage() {
             </div>
           )}
 
+          {/* ── Forgot password ── */}
+          {mode === "forgot-password" && (
+            <div className="space-y-5">
+              <div className="space-y-1.5">
+                <h2 className="font-bold text-white text-base">Reset Password</h2>
+                <p className="text-white/40 text-xs leading-relaxed">
+                  Enter your email and we'll send you a link to reset your password.
+                </p>
+              </div>
+              <form onSubmit={handleForgotPassword} className="space-y-3">
+                <div className="relative">
+                  <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/25" />
+                  <input type="email" placeholder="your@email.com"
+                    value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
+                    className="w-full bg-white/[0.04] border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-500/50 transition-all"
+                    autoFocus required />
+                </div>
+                <button type="submit" disabled={busy}
+                  className="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold py-2.5 rounded-xl transition-all disabled:opacity-50 text-sm">
+                  {busy ? <Loader2 size={15} className="animate-spin mx-auto" /> : "Send Reset Link"}
+                </button>
+              </form>
+              {success && (
+                <div className="flex items-start gap-2 text-emerald-400 text-xs bg-emerald-500/8 border border-emerald-500/15 rounded-xl p-3">
+                  <CheckCircle2 size={13} className="shrink-0 mt-0.5" /><span>{success}</span>
+                </div>
+              )}
+              {error && (
+                <div className="flex items-start gap-2 text-red-400 text-xs bg-red-500/8 border border-red-500/15 rounded-xl p-3">
+                  <AlertCircle size={13} className="shrink-0 mt-0.5" /><span>{error}</span>
+                </div>
+              )}
+              <div className="text-center">
+                <button onClick={() => { setMode("login"); clear(); }}
+                  className="text-white/30 hover:text-white/60 text-xs transition-colors">
+                  Back to Sign In
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* ── Login / Signup tabs ── */}
           {(mode === "login" || mode === "signup") && (
             <>
+              {searchParams.get("expired") && mode === "login" && (
+                <div className="flex items-start gap-2 text-amber-400 text-xs bg-amber-500/8 border border-amber-500/15 rounded-xl p-3">
+                  <AlertCircle size={13} className="shrink-0 mt-0.5" />
+                  <span>Your session has expired. Please sign in again.</span>
+                </div>
+              )}
+
               {/* Tab switcher */}
               <div className="flex bg-white/[0.04] rounded-xl p-1 gap-1">
                 {(["login", "signup"] as const).map(t => (
@@ -245,6 +313,15 @@ export default function AuthPage() {
                       {busy ? <Loader2 size={15} className="animate-spin mx-auto" /> : "Sign In"}
                     </button>
                   </form>
+
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => { setMode("forgot-password"); clear(); setForgotEmail(loginEmail); }}
+                      className="text-white/30 hover:text-white/60 text-xs transition-colors">
+                      Forgot your password?
+                    </button>
+                  </div>
 
                   <div className="rounded-xl border border-brand-500/20 bg-brand-500/8 p-4 text-center space-y-2">
                     <p className="text-white/50 text-xs">Want full access right now?</p>
@@ -309,5 +386,17 @@ export default function AuthPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 size={24} className="text-brand-500 animate-spin" />
+      </div>
+    }>
+      <AuthPageInner />
+    </Suspense>
   );
 }

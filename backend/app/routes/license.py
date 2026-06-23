@@ -211,6 +211,12 @@ async def lemon_webhook(request: Request, db: Session = Depends(get_db)):
     order_id = str(data.get("data", {}).get("id", ""))
     variant_id = str(attrs.get("first_order_item", {}).get("variant_id", ""))
 
+    # Idempotency: skip if we already processed this order
+    if order_id:
+        existing = db.query(License).filter(License.order_id == order_id).first()
+        if existing:
+            return {"received": True, "key": existing.key, "duplicate": True}
+
     # Determine plan from variant
     plan = "pro"
     if settings.lemon_squeezy_variant_free and variant_id == settings.lemon_squeezy_variant_free:

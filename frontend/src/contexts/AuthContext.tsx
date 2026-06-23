@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
 import axios from "axios";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -19,6 +19,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   loading: boolean;
+  sessionExpired: boolean;
   loginWithGoogle: (credential: string) => Promise<boolean>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   signupWithEmail: (firstName: string, lastName: string, email: string, password: string) => Promise<string>;
@@ -34,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<AuthUser | null>(null);
   const [token, setToken]     = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   const _saveSession = (tok: string, u: AuthUser) => {
     localStorage.setItem(TOKEN_KEY, tok);
@@ -51,10 +53,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       setToken(tok);
       setUser(res.data as AuthUser);
-    } catch {
+    } catch (err: any) {
       localStorage.removeItem(TOKEN_KEY);
       setToken(null);
       setUser(null);
+      if (tok && err?.response?.status === 401) {
+        setSessionExpired(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -106,17 +111,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return res.data.message as string;
   };
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem("clipforge_plan");
     localStorage.removeItem("clipforge_license_key");
     setToken(null);
     setUser(null);
-  };
+    setSessionExpired(false);
+  }, []);
 
   return (
     <AuthContext.Provider value={{
-      user, token, loading,
+      user, token, loading, sessionExpired,
       loginWithGoogle, loginWithEmail, signupWithEmail, setPassword,
       activateKey, logout, refreshUser,
     }}>

@@ -104,11 +104,33 @@ def process_video_job(job_id: str, source_url: str = None, local_path: str = Non
         _set_status(job_id, JobStatus.failed, error=str(exc))
 
     finally:
-        # Clean up large temp files (keep clips dir, delete raw audio/frames)
-        for fname in ["audio.wav"]:
-            fpath = os.path.join(settings.temp_dir, job_id, fname)
+        job_dir = os.path.join(settings.temp_dir, job_id)
+        # Clean up large temp files (keep clips dir for downloads)
+        for fname in ["audio.wav", "source.mp4", "source.mkv", "source.webm"]:
+            fpath = os.path.join(job_dir, fname)
             if os.path.exists(fpath):
-                os.remove(fpath)
-        frames_dir = os.path.join(settings.temp_dir, job_id, "frames")
+                try:
+                    os.remove(fpath)
+                except OSError:
+                    pass
+        frames_dir = os.path.join(job_dir, "frames")
         if os.path.exists(frames_dir):
-            shutil.rmtree(frames_dir)
+            shutil.rmtree(frames_dir, ignore_errors=True)
+
+
+def cleanup_old_jobs(max_age_hours: int = 24):
+    """Remove job directories older than max_age_hours. Call periodically."""
+    import time
+    base = settings.temp_dir
+    if not os.path.exists(base):
+        return
+    now = time.time()
+    cutoff = now - (max_age_hours * 3600)
+    for name in os.listdir(base):
+        job_dir = os.path.join(base, name)
+        if os.path.isdir(job_dir):
+            try:
+                if os.path.getmtime(job_dir) < cutoff:
+                    shutil.rmtree(job_dir, ignore_errors=True)
+            except OSError:
+                pass

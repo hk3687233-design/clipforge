@@ -161,10 +161,26 @@ async def create_job(
 # ── Job status ──────────────────────────────────────────────────────────────
 
 @router.get("/{job_id}")
-def get_job(job_id: str, db: Session = Depends(get_db)):
+def get_job(
+    job_id: str,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(404, "Job not found")
+
+    if job.user_id and authorization and authorization.startswith("Bearer "):
+        from app.services.auth_service import decode_token
+        try:
+            payload = decode_token(authorization.removeprefix("Bearer ").strip())
+            if payload.get("sub") != job.user_id and not payload.get("admin"):
+                raise HTTPException(403, "Access denied")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
     return {
         "job_id":     job.id,
         "status":     job.status,
@@ -207,12 +223,18 @@ def download_all_clips(job_id: str):
 
 @router.get("/{job_id}/clips/{filename}")
 def download_clip(job_id: str, filename: str):
-    clip_path = os.path.join(settings.temp_dir, job_id, "clips", filename)
+    safe_name = os.path.basename(filename)
+    if not safe_name or safe_name != filename:
+        raise HTTPException(400, "Invalid filename")
+    clips_dir = os.path.join(settings.temp_dir, job_id, "clips")
+    clip_path = os.path.normpath(os.path.join(clips_dir, safe_name))
+    if not clip_path.startswith(os.path.normpath(clips_dir)):
+        raise HTTPException(400, "Invalid filename")
     if not os.path.exists(clip_path):
         raise HTTPException(404, "Clip not found")
     return FileResponse(
         clip_path,
         media_type="video/mp4",
-        filename=filename,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        filename=safe_name,
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
     )

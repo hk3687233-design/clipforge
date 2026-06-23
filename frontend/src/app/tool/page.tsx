@@ -10,7 +10,7 @@ const LEMON_URL = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#";
 
 export default function ToolPage() {
   const router = useRouter();
-  const { user, loading, logout, activateKey } = useAuth();
+  const { user, loading, logout, activateKey, sessionExpired } = useAuth();
   const [jobId, setJobId] = useState<string | null>(null);
 
   // Activate key modal
@@ -22,8 +22,14 @@ export default function ToolPage() {
 
   useEffect(() => {
     if (loading) return;
-    if (!user) router.replace("/auth");
-  }, [user, loading, router]);
+    if (!user) {
+      if (sessionExpired) {
+        router.replace("/auth?expired=1");
+      } else {
+        router.replace("/auth");
+      }
+    }
+  }, [user, loading, sessionExpired, router]);
 
   if (loading || !user) return (
     <div className="min-h-screen flex items-center justify-center">
