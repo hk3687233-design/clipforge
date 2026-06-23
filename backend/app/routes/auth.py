@@ -77,6 +77,14 @@ class ResetPasswordRequest(BaseModel):
     token: str
     password: str
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+class UpdateProfileRequest(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -347,3 +355,54 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Password updated successfully! You can now sign in."}
+
+
+@router.post("/change-password")
+def change_password(
+    req: ChangePasswordRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Change password for logged-in user (requires current password)."""
+    if len(req.new_password.strip()) < 6:
+        raise HTTPException(400, "New password must be at least 6 characters")
+
+    if user.password_hash and not _verify_password(req.current_password, user.password_hash):
+        raise HTTPException(401, "Current password is incorrect")
+
+    user.password_hash = _hash_password(req.new_password.strip())
+    db.commit()
+    db.refresh(user)
+
+    return {"message": "Password changed successfully."}
+
+
+@router.patch("/profile")
+def update_profile(
+    req: UpdateProfileRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update user profile (name)."""
+    if req.first_name is not None:
+        user.first_name = req.first_name.strip()
+    if req.last_name is not None:
+        user.last_name = req.last_name.strip()
+    first = user.first_name or ""
+    last = user.last_name or ""
+    user.name = f"{first} {last}".strip() or user.name
+    db.commit()
+    db.refresh(user)
+
+    return {"message": "Profile updated.", "user": _user_dict(user)}
+
+
+@router.delete("/account")
+def delete_account(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete the current user's account permanently."""
+    db.delete(user)
+    db.commit()
+    return {"message": "Account deleted."}

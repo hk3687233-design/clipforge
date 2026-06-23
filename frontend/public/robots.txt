@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /tool
+Disallow: /account
+Disallow: /history
+Disallow: /auth
+
+Sitemap: https://getclipforge.online/sitemap.xml

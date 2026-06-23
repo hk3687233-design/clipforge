@@ -1,7 +1,15 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("clipforge")
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -27,10 +35,13 @@ async def _periodic_cleanup():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Starting ClipForge API v2.1.0")
     cleanup_old_jobs(max_age_hours=48)
+    logger.info("Startup cleanup complete")
     task = asyncio.create_task(_periodic_cleanup())
     yield
     task.cancel()
+    logger.info("Shutting down ClipForge API")
 
 # Rate limiter (keyed by IP)
 limiter = Limiter(key_func=get_remote_address)

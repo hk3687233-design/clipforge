@@ -3,8 +3,11 @@ Background task runner using FastAPI's BackgroundTasks (no Celery needed).
 Saves progress after EVERY clip so a crash never loses completed work.
 """
 import os
+import logging
 import shutil
 from app.database import SessionLocal, Job, JobStatus
+
+logger = logging.getLogger("clipforge.worker")
 from app.services.downloader import download_video
 from app.services.analyzer import analyze_video
 from app.services.clipper import extract_clip
@@ -41,6 +44,7 @@ def _append_product(job_id: str, product: dict):
 
 def process_video_job(job_id: str, source_url: str = None, local_path: str = None, max_clips: int = None, max_duration: int = None):
     """Full pipeline: download → analyze → clip (one at a time, saving each) → done."""
+    logger.info(f"Job {job_id}: starting pipeline (url={source_url}, local={bool(local_path)})")
     try:
         video_path = local_path
 
@@ -101,6 +105,7 @@ def process_video_job(job_id: str, source_url: str = None, local_path: str = Non
             _set_status(job_id, JobStatus.done)
 
     except Exception as exc:
+        logger.error(f"Job {job_id}: failed — {exc}")
         _set_status(job_id, JobStatus.failed, error=str(exc))
 
     finally:

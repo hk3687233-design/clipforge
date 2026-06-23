@@ -13,6 +13,7 @@ export interface AuthUser {
   plan: "free" | "pro";
   is_admin: boolean;
   has_password?: boolean;
+  daily_jobs_used?: number;
 }
 
 interface AuthContextValue {

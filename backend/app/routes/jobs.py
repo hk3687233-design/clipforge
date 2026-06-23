@@ -158,6 +158,38 @@ async def create_job(
     return {"job_id": job_id, "status": "pending", "plan": plan}
 
 
+# ── Job history (user's own jobs) ───────────────────────────────────────────
+
+@router.get("/")
+def list_jobs(
+    page: int = 1,
+    limit: int = 20,
+    auth: _AuthCtx = Depends(_get_auth),
+    db: Session = Depends(get_db),
+):
+    if not auth.user:
+        raise HTTPException(401, "Authentication required")
+    q = db.query(Job).filter(Job.user_id == auth.user.id)
+    total = q.count()
+    items = q.order_by(Job.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+    return {
+        "total": total,
+        "page": page,
+        "items": [
+            {
+                "job_id": j.id,
+                "status": j.status,
+                "source_url": j.source_url,
+                "original_filename": j.original_filename,
+                "products": j.products or [],
+                "error": j.error,
+                "created_at": j.created_at.isoformat() if j.created_at else None,
+            }
+            for j in items
+        ],
+    }
+
+
 # ── Job status ──────────────────────────────────────────────────────────────
 
 @router.get("/{job_id}")

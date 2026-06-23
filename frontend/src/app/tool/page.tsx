@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Uploader from "@/components/Uploader";
 import JobPoller from "@/components/JobPoller";
 import { useAuth } from "@/contexts/AuthContext";
-import { Scissors, Zap, Lock, Loader2, User, Key, X, CheckCircle2, AlertCircle } from "lucide-react";
+import { Scissors, Zap, Lock, Loader2, User, Key, X, CheckCircle2, AlertCircle, History } from "lucide-react";
 
 const LEMON_URL = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#";
 
@@ -84,11 +84,16 @@ export default function ToolPage() {
                 <Zap size={12} /><span className="hidden sm:inline">Upgrade — </span>$29
               </a>
             )}
-            <div className="flex items-center gap-2">
-              {user.avatar_url
-                ? <img src={user.avatar_url} alt="" className="w-7 h-7 rounded-full" />
-                : <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center"><User size={12} className="text-white/40" /></div>
-              }
+            <div className="flex items-center gap-3">
+              <a href="/history" title="Job history" className="text-white/25 hover:text-white/60 transition-colors">
+                <History size={16} />
+              </a>
+              <a href="/account" title="Account settings">
+                {user.avatar_url
+                  ? <img src={user.avatar_url} alt="" className="w-7 h-7 rounded-full hover:ring-2 hover:ring-brand-500/50 transition-all" />
+                  : <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/15 transition-colors"><User size={12} className="text-white/40" /></div>
+                }
+              </a>
               <button onClick={logout} className="text-white/30 hover:text-white/60 text-xs transition-colors">
                 Sign out
               </button>
@@ -109,9 +114,12 @@ export default function ToolPage() {
           {plan === "free" && (
             <div className="flex flex-col items-center gap-2">
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-yellow-400 text-xs font-medium">
-                <Lock size={12} /> Free plan: 3 exports/day · max 10 min · 5 clips ·{" "}
+                <Lock size={12} /> Free plan: {user.daily_jobs_used || 0}/3 exports used today · max 10 min · 5 clips ·{" "}
                 <a href={LEMON_URL} className="underline underline-offset-2 font-bold">Upgrade for unlimited</a>
               </div>
+              {(user.daily_jobs_used || 0) >= 2 && (user.daily_jobs_used || 0) < 3 && (
+                <p className="text-amber-400/80 text-xs">Last free export for today — upgrade to Pro for unlimited</p>
+              )}
               <button
                 onClick={() => { setShowActivate(true); setKeyError(""); setKeySuccess(""); }}
                 className="flex items-center gap-1.5 text-white/25 hover:text-brand-400 text-xs transition-colors">

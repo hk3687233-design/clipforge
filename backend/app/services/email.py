@@ -3,15 +3,18 @@ Email delivery via Resend (free 3000/month).
 Falls back to console log if RESEND_API_KEY not set (local dev).
 """
 import json
+import logging
 import requests
 from app.config import settings
+
+logger = logging.getLogger("clipforge.email")
 
 FRONTEND_URL = "https://getclipforge.online"
 
 
 def _send_email(to_email: str, subject: str, html: str) -> bool:
     if not settings.resend_api_key:
-        print(f"\n[DEV EMAIL] To: {to_email} | Subject: {subject}\n")
+        logger.info(f"[DEV] Email to={to_email} subject={subject}")
         return True
     resp = requests.post(
         "https://api.resend.com/emails",

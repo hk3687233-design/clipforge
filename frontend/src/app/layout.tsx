@@ -5,6 +5,7 @@ import { Providers } from "@/components/Providers";
 export const metadata: Metadata = {
   title: "ClipForge — Product Clips from Any Video",
   description: "Paste any YouTube, TikTok or Instagram URL. AI detects every product and exports individual clips instantly.",
+  metadataBase: new URL("https://getclipforge.online"),
   icons: {
     icon: [
       { url: "/favicon.svg", type: "image/svg+xml" },
@@ -14,8 +15,19 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "ClipForge — AI Product Clip Extractor",
-    description: "Turn any review video into product clips automatically.",
+    description: "Turn any review video into product clips automatically. AI detects every product mentioned and exports separate high-quality clips.",
     type: "website",
+    url: "https://getclipforge.online",
+    siteName: "ClipForge",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ClipForge — AI Product Clip Extractor",
+    description: "Turn any review video into product clips automatically.",
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 };
 
