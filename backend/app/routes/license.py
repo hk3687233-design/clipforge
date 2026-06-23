@@ -323,9 +323,9 @@ def admin_test_email(
     """Test email sending — returns success/error details."""
     try:
         result = send_license_email(email, "CF-PRO-TEST11-TEST22-TEST33", "pro")
-        return {"sent": result, "to": email, "from": settings.email_from, "key_prefix": settings.resend_api_key[:12] if settings.resend_api_key else "not set"}
+        return {"sent": result, "to": email, "from": settings.email_from, "api_configured": bool(settings.resend_api_key)}
     except Exception as e:
-        return {"sent": False, "error": str(e), "from": settings.email_from, "key_prefix": settings.resend_api_key[:12] if settings.resend_api_key else "not set"}
+        return {"sent": False, "error": str(e), "from": settings.email_from, "api_configured": bool(settings.resend_api_key)}
 
 
 @router.post("/api/admin/licenses/generate")
@@ -487,4 +487,54 @@ def admin_delete_license(
     db.query(User).filter(User.license_key == key).update({"license_key": None, "plan": "free"})
     db.delete(lic)
     db.commit()
+    return {"deleted": True}
+
+
+@router.get("/api/admin/jobs")
+def admin_list_jobs(
+    page: int = 1,
+    limit: int = 50,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: None = Depends(_check_admin),
+):
+    q = db.query(Job)
+    if status:
+        q = q.filter(Job.status == status)
+    total = q.count()
+    items = q.order_by(Job.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+    return {
+        "total": total,
+        "page": page,
+        "items": [
+            {
+                "id":         j.id,
+                "status":     j.status,
+                "source_url": j.source_url,
+                "user_id":    j.user_id,
+                "plan":       j.plan,
+                "error":      j.error,
+                "products":   len(j.products or []),
+                "created_at": j.created_at.isoformat() if j.created_at else None,
+            }
+            for j in items
+        ],
+    }
+
+
+@router.delete("/api/admin/jobs/{job_id}")
+def admin_delete_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    _: None = Depends(_check_admin),
+):
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(404, "Job not found")
+    db.delete(job)
+    db.commit()
+    import shutil, os
+    job_dir = os.path.join(settings.temp_dir, job_id)
+    if os.path.exists(job_dir):
+        shutil.rmtree(job_dir, ignore_errors=True)
     return {"deleted": True}

@@ -22,10 +22,10 @@ def _p(path: str) -> str:
 router  = APIRouter(prefix="/jobs", tags=["jobs"])
 limiter = Limiter(key_func=get_remote_address)
 
-FREE_DAILY_LIMIT  = 3
-FREE_CLIPS_LIMIT  = 5
-FREE_MAX_DURATION = 600   # 10 minutes in seconds
-PRO_DAILY_LIMIT   = 40    # protects Gemini API quota (1500 RPD / ~2 calls per job)
+FREE_DAILY_LIMIT  = settings.free_daily_limit
+FREE_CLIPS_LIMIT  = settings.free_clips_limit
+FREE_MAX_DURATION = settings.free_max_duration
+PRO_DAILY_LIMIT   = settings.pro_daily_limit
 
 
 # ── Auth helper: accept JWT Bearer OR legacy X-License-Key ─────────────────

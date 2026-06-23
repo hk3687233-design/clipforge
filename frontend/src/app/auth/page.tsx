@@ -357,16 +357,35 @@ function AuthPageInner() {
                       className="w-full bg-white/[0.04] border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-500/50 transition-all"
                       required />
                   </div>
-                  <div className="relative">
-                    <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/25" />
-                    <input type={showPass2 ? "text" : "password"} placeholder="Password (min 6 chars)"
-                      value={signupPass} onChange={e => setSignupPass(e.target.value)}
-                      className="w-full bg-white/[0.04] border border-white/10 rounded-xl pl-9 pr-10 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-500/50 transition-all"
-                      required />
-                    <button type="button" onClick={() => setShowPass2(!showPass2)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 hover:text-white/50">
-                      {showPass2 ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
+                  <div>
+                    <div className="relative">
+                      <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/25" />
+                      <input type={showPass2 ? "text" : "password"} placeholder="Password (min 6 chars)"
+                        value={signupPass} onChange={e => setSignupPass(e.target.value)}
+                        className="w-full bg-white/[0.04] border border-white/10 rounded-xl pl-9 pr-10 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-500/50 transition-all"
+                        required />
+                      <button type="button" onClick={() => setShowPass2(!showPass2)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 hover:text-white/50">
+                        {showPass2 ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                    {signupPass.length > 0 && (() => {
+                      const s = signupPass;
+                      const score = (s.length >= 6 ? 1 : 0) + (s.length >= 8 ? 1 : 0) + (/[A-Z]/.test(s) ? 1 : 0) + (/[0-9]/.test(s) ? 1 : 0) + (/[^A-Za-z0-9]/.test(s) ? 1 : 0);
+                      const label = score <= 1 ? "Weak" : score <= 3 ? "Fair" : "Strong";
+                      const color = score <= 1 ? "bg-red-500" : score <= 3 ? "bg-yellow-500" : "bg-emerald-500";
+                      const textColor = score <= 1 ? "text-red-400" : score <= 3 ? "text-yellow-400" : "text-emerald-400";
+                      return (
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <div className="flex gap-1 flex-1">
+                            {[1,2,3,4,5].map(i => (
+                              <div key={i} className={`h-1 flex-1 rounded-full ${i <= score ? color : "bg-white/10"}`} />
+                            ))}
+                          </div>
+                          <span className={`text-[10px] font-medium ${textColor}`}>{label}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                   <button type="submit" disabled={busy}
                     className="w-full bg-brand-600 hover:bg-brand-500 text-white text-sm font-bold py-2.5 rounded-xl transition-all disabled:opacity-50">

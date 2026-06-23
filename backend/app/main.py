@@ -16,6 +16,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from app.database import Base, engine, create_tables, run_migrations
+from app.config import settings
 from app.routes import jobs, license, auth
 from app.worker import cleanup_old_jobs
 
@@ -52,12 +53,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://getclipforge.online",
-        "https://www.getclipforge.online",
-        "https://getclipforge.vercel.app",
-        "http://localhost:3000",
-    ],
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

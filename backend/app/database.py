@@ -6,7 +6,9 @@ import enum
 import uuid as _uuid
 from app.config import settings
 
-engine = create_engine(settings.database_url, connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {})
+_connect_args = {"check_same_thread": False} if "sqlite" in settings.database_url else {}
+_pool_args = {} if "sqlite" in settings.database_url else {"pool_size": 10, "max_overflow": 20, "pool_pre_ping": True}
+engine = create_engine(settings.database_url, connect_args=_connect_args, **_pool_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
