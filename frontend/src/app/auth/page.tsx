@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const CHECKOUT_URL = process.env.NEXT_PUBLIC_GUMROAD_CHECKOUT_URL || "#";
+import { CheckoutModal } from "@/components/CheckoutModal";
 type Mode = "login" | "signup" | "signup-success" | "set-password" | "forgot-password";
 
 function AuthPageInner() {
@@ -39,6 +39,7 @@ function AuthPageInner() {
 
   // Forgot password field
   const [forgotEmail, setForgotEmail] = useState("");
+  const [showCheckout, setShowCheckout] = useState(false);
 
   // Redirect if already logged in (with password set)
   useEffect(() => {
@@ -325,10 +326,10 @@ function AuthPageInner() {
 
                   <div className="rounded-xl border border-brand-500/20 bg-brand-500/8 p-4 text-center space-y-2">
                     <p className="text-white/50 text-xs">Want full access right now?</p>
-                    <a href={CHECKOUT_URL}
+                    <button onClick={() => setShowCheckout(true)}
                       className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-5 py-2 rounded-lg transition-all">
                       <Zap size={12} /> Get Pro — $29 Lifetime
-                    </a>
+                    </button>
                   </div>
                 </div>
               )}
@@ -404,6 +405,7 @@ function AuthPageInner() {
           )}
         </div>
       </div>
+      <CheckoutModal open={showCheckout} onClose={() => setShowCheckout(false)} />
     </div>
   );
 }

@@ -1,9 +1,10 @@
 "use client";
+import { useState } from "react";
 import { Scissors, CheckCircle2, Zap, Shield, ArrowLeft } from "lucide-react";
-
-const CHECKOUT_URL = process.env.NEXT_PUBLIC_GUMROAD_CHECKOUT_URL || "#";
+import { CheckoutModal } from "@/components/CheckoutModal";
 
 export default function PricingPage() {
+  const [showCheckout, setShowCheckout] = useState(false);
   return (
     <div className="min-h-screen relative overflow-hidden">
       <div className="orb w-96 h-96 bg-brand-600/20 top-0 left-1/2 -translate-x-1/2 -translate-y-1/2" />
@@ -80,9 +81,9 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-              <a href={CHECKOUT_URL} className="flex items-center justify-center gap-3 w-full bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white font-black py-4 rounded-2xl text-base transition-all shadow-xl shadow-brand-500/30">
+              <button onClick={() => setShowCheckout(true)} className="flex items-center justify-center gap-3 w-full bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white font-black py-4 rounded-2xl text-base transition-all shadow-xl shadow-brand-500/30">
                 <Zap size={18} /> Get Lifetime Access — $29
-              </a>
+              </button>
               <div className="flex items-center justify-center gap-2 mt-4 text-white/25 text-xs">
                 <Shield size={11} /> 7-day money-back guarantee
               </div>
@@ -90,6 +91,7 @@ export default function PricingPage() {
           </div>
         </div>
       </div>
+      <CheckoutModal open={showCheckout} onClose={() => setShowCheckout(false)} />
     </div>
   );
 }

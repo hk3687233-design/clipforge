@@ -8,6 +8,7 @@ import {
   Scissors, User, Mail, Lock, Eye, EyeOff, Shield, Trash2,
   Loader2, ArrowLeft, Zap, Key, CheckCircle2,
 } from "lucide-react";
+import { CheckoutModal } from "@/components/CheckoutModal";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -28,6 +29,7 @@ export default function AccountPage() {
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -186,10 +188,10 @@ export default function AccountPage() {
               </p>
             </div>
             {user.plan === "free" && (
-              <a href={process.env.NEXT_PUBLIC_GUMROAD_CHECKOUT_URL || "#"}
+              <button onClick={() => setShowCheckout(true)}
                 className="bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all">
                 Upgrade
-              </a>
+              </button>
             )}
           </div>
         </div>
@@ -222,6 +224,7 @@ export default function AccountPage() {
         </div>
 
       </div>
+      <CheckoutModal open={showCheckout} onClose={() => setShowCheckout(false)} />
     </div>
   );
 }

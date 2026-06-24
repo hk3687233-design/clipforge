@@ -8,14 +8,14 @@ import {
   Film, Package, Link2, TrendingUp, Clock, User, ChevronRight,
   Twitter, Youtube, Mail,
 } from "lucide-react";
-
-const CHECKOUT_URL = process.env.NEXT_PUBLIC_GUMROAD_CHECKOUT_URL || "#";
+import { CheckoutModal } from "@/components/CheckoutModal";
 
 export default function Home() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [videoOpen, setVideoOpen] = useState(false);
   const [barDismissed, setBarDismissed] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Secret: 5 clicks on logo → admin
@@ -59,10 +59,10 @@ export default function Home() {
               <span className="text-white/50 mx-1.5 hidden sm:inline">·</span>
               <span className="text-white/55 hidden sm:inline">Price doubles to $58 after launch period ends</span>
             </p>
-            <a href={CHECKOUT_URL}
+            <button onClick={() => setShowCheckout(true)}
               className="shrink-0 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white text-xs font-black px-3 py-1.5 rounded-lg transition-all shadow-md shadow-brand-500/30 whitespace-nowrap">
               Claim $29 →
-            </a>
+            </button>
           </div>
           <button
             onClick={() => setBarDismissed(true)}
@@ -97,10 +97,10 @@ export default function Home() {
                   className="text-sm text-white/40 hover:text-white/80 transition-colors hidden sm:flex items-center gap-1.5 font-medium">
                   <User size={13} /> Sign In
                 </a>
-                <a href={CHECKOUT_URL}
+                <button onClick={() => setShowCheckout(true)}
                   className="flex items-center gap-1.5 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-all shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40">
                   <Zap size={14} /><span className="hidden sm:inline">Get Pro — </span>$29
-                </a>
+                </button>
               </>
             )
           )}
@@ -129,11 +129,11 @@ export default function Home() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
-          <a href={CHECKOUT_URL}
+          <button onClick={() => setShowCheckout(true)}
             className="w-full sm:w-auto relative flex items-center justify-center gap-3 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white font-black px-8 py-4 rounded-2xl text-lg transition-all shadow-2xl shadow-brand-500/30 hover:shadow-brand-500/50 group">
             <Zap size={20} className="shrink-0" /> Get Pro Lifetime — $29
             <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform shrink-0" />
-          </a>
+          </button>
           <a href="/auth"
             className="w-full sm:w-auto flex items-center justify-center gap-3 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-brand-500/40 text-white font-semibold px-6 py-4 rounded-2xl text-base transition-all">
             Start Free — No Card Needed
@@ -372,10 +372,10 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
-              <a href={CHECKOUT_URL}
+              <button onClick={() => setShowCheckout(true)}
                 className="flex items-center justify-center gap-3 w-full bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white font-black py-4 rounded-2xl text-base transition-all shadow-xl shadow-brand-500/30 hover:shadow-brand-500/50">
                 <Zap size={18} /> Get Lifetime Access — $29
-              </a>
+              </button>
               <div className="flex items-center justify-center gap-2 mt-4 text-white/25 text-xs">
                 <Shield size={11} /> Secure · Gumroad · Instant delivery
               </div>
@@ -447,10 +447,10 @@ export default function Home() {
               </p>
               <p className="text-brand-400/45 text-xs mb-7 font-mono tracking-widest">getclipforge.online</p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <a href={CHECKOUT_URL}
+                <button onClick={() => setShowCheckout(true)}
                   className="w-full sm:w-auto flex items-center justify-center gap-3 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white font-black px-10 py-4 rounded-2xl text-lg transition-all shadow-2xl shadow-brand-500/30 hover:shadow-brand-500/50">
                   <Zap size={20} /> Get Lifetime Access — $29
-                </a>
+                </button>
                 <a href="/auth"
                   className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-brand-500/30 text-white/60 hover:text-white font-semibold px-8 py-4 rounded-2xl text-base transition-all">
                   Start Free →
@@ -527,9 +527,9 @@ export default function Home() {
                 { label: "FAQ", href: "/faq" },
                 { label: "Contact Us", href: "/contact" },
                 { label: "Activate License", href: "/auth" },
-                { label: "Get Pro — $29", href: CHECKOUT_URL },
-              ].map(l => (
-                <a key={l.label} href={l.href} className="block text-white/35 hover:text-white/75 text-sm transition-colors">{l.label}</a>
+                { label: "Get Pro — $29", href: "#", onClick: () => setShowCheckout(true) },
+              ].map((l: any) => (
+                <a key={l.label} href={l.href} onClick={l.onClick} className="block text-white/35 hover:text-white/75 text-sm transition-colors cursor-pointer">{l.label}</a>
               ))}
             </div>
           </div>
@@ -564,6 +564,8 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      <CheckoutModal open={showCheckout} onClose={() => setShowCheckout(false)} />
     </div>
   );
 }
