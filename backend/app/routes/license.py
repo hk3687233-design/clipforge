@@ -526,11 +526,16 @@ DEFAULT_CONFIG = {
 
 @router.get("/api/config")
 def get_site_config(db: Session = Depends(get_db)):
-    """Public endpoint — returns site-wide config for frontend."""
+    """Public endpoint — returns site-wide config + seats remaining for frontend."""
     rows = db.query(SiteConfig).all()
     config = {**DEFAULT_CONFIG}
     for r in rows:
         config[r.key] = r.value
+
+    pro_count = db.query(User).filter(User.plan == "pro").count()
+    max_seats = int(config.get("max_pro_seats", settings.max_pro_seats))
+    config["seats_total"] = max_seats
+    config["seats_remaining"] = max(0, max_seats - pro_count)
     return config
 
 
@@ -541,7 +546,7 @@ def admin_update_config(
     _: None = Depends(_check_admin),
 ):
     """Update one or more site config keys."""
-    allowed = {"whatsapp_number"}
+    allowed = {"whatsapp_number", "max_pro_seats"}
     updated = {}
     for key, value in request_body.items():
         if key not in allowed:

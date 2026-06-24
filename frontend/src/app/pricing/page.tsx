@@ -1,10 +1,17 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Scissors, CheckCircle2, Zap, Shield, ArrowLeft } from "lucide-react";
 import { CheckoutModal } from "@/components/CheckoutModal";
 
 export default function PricingPage() {
   const [showCheckout, setShowCheckout] = useState(false);
+  const [seatsLeft, setSeatsLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    const api = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    fetch(`${api}/api/config`).then(r => r.json()).then(d => setSeatsLeft(d.seats_remaining ?? null)).catch(() => {});
+  }, []);
+
   return (
     <div className="min-h-screen relative overflow-hidden">
       <div className="orb w-96 h-96 bg-brand-600/20 top-0 left-1/2 -translate-x-1/2 -translate-y-1/2" />
@@ -73,6 +80,11 @@ export default function PricingPage() {
                   <span className="text-5xl font-black text-white">$29</span>
                 </div>
                 <p className="text-white/30 text-sm">one-time · lifetime · no renewal</p>
+                {seatsLeft !== null && seatsLeft <= 50 && (
+                  <p className="text-red-400/80 text-xs mt-1.5 font-bold animate-pulse">
+                    Only {seatsLeft} seat{seatsLeft !== 1 ? "s" : ""} left
+                  </p>
+                )}
               </div>
               <ul className="space-y-3 mb-8 flex-1">
                 {["Unlimited video processing", "100+ clips per video", "YouTube · TikTok · Instagram", "Original quality MP4 export", "Download all clips as ZIP", "Affiliate link extraction", "Priority processing", "Free updates forever", "Priority support"].map(f => (

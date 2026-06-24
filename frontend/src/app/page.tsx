@@ -16,6 +16,7 @@ export default function Home() {
   const [videoOpen, setVideoOpen] = useState(false);
   const [barDismissed, setBarDismissed] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
+  const [seatsLeft, setSeatsLeft] = useState<number | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Secret: 5 clicks on logo → admin
@@ -28,6 +29,11 @@ export default function Home() {
       router.push("/admin");
     }
   };
+
+  useEffect(() => {
+    const api = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    fetch(`${api}/api/config`).then(r => r.json()).then(d => setSeatsLeft(d.seats_remaining ?? null)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setVideoOpen(false); };
@@ -354,6 +360,11 @@ export default function Home() {
                 </div>
                 <p className="text-white/30 text-sm">one-time · lifetime · no renewal</p>
                 <p className="text-orange-400/70 text-xs mt-1.5 font-medium">⏳ Price doubles to $58 after launch</p>
+                {seatsLeft !== null && seatsLeft <= 50 && (
+                  <p className="text-red-400/80 text-xs mt-1.5 font-bold animate-pulse">
+                    🔥 Only {seatsLeft} seat{seatsLeft !== 1 ? "s" : ""} left at this price
+                  </p>
+                )}
               </div>
               <ul className="space-y-3 mb-8 flex-1">
                 {[

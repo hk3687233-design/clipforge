@@ -286,6 +286,13 @@ def activate_key(
     db: Session = Depends(get_db),
 ):
     """Link a pro license key to the current user → upgrades plan to pro."""
+    if user.plan == "pro":
+        raise HTTPException(400, "Your account is already Pro")
+
+    pro_count = db.query(User).filter(User.plan == "pro").count()
+    if pro_count >= settings.max_pro_seats:
+        raise HTTPException(403, "All Pro seats are currently filled. Please contact support.")
+
     key = req.key.strip().upper()
     if not KEY_PATTERN.match(key):
         raise HTTPException(400, "Invalid license key format")

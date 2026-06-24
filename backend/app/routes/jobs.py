@@ -2,7 +2,7 @@ import uuid
 import os
 import zipfile
 from datetime import datetime, date
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Header, Request
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Header, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from slowapi import Limiter
@@ -12,7 +12,7 @@ from typing import Optional
 from app.database import get_db, Job, JobStatus, License, User
 from app.services.downloader import is_supported_url
 from app.services.clipper import QUALITY_MAP
-from app.worker import process_video_job
+from app.worker import enqueue_job, get_queue_size
 from app.config import settings
 
 
@@ -69,7 +69,6 @@ def _get_auth(
 @limiter.limit("12/minute")
 async def create_job(
     request: Request,
-    background_tasks: BackgroundTasks,
     url:  Optional[str]        = Form(None),
     file: Optional[UploadFile] = File(None),
     auth: _AuthCtx = Depends(_get_auth),
@@ -146,8 +145,7 @@ async def create_job(
 
     db.commit()
 
-    background_tasks.add_task(
-        process_video_job,
+    enqueue_job(
         job_id=job_id,
         source_url=url,
         local_path=local_path,
@@ -155,7 +153,8 @@ async def create_job(
         max_duration=FREE_MAX_DURATION if plan == "free" else None,
     )
 
-    return {"job_id": job_id, "status": "pending", "plan": plan}
+    queue_pos = get_queue_size()
+    return {"job_id": job_id, "status": "pending", "plan": plan, "queue_position": queue_pos}
 
 
 # ── Job history (user's own jobs) ───────────────────────────────────────────

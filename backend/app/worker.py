@@ -1,10 +1,12 @@
 """
-Background task runner using FastAPI's BackgroundTasks (no Celery needed).
+Background task runner with sequential job queue (one job at a time).
 Saves progress after EVERY clip so a crash never loses completed work.
 """
 import os
 import logging
 import shutil
+import threading
+import queue as _queue
 from app.database import SessionLocal, Job, JobStatus
 
 logger = logging.getLogger("clipforge.worker")
@@ -13,6 +15,38 @@ from app.services.analyzer import analyze_video
 from app.services.clipper import extract_clip
 from app.services.storage import upload_all_clips
 from app.config import settings
+
+_job_queue: _queue.Queue = _queue.Queue()
+_worker_started = False
+_worker_lock = threading.Lock()
+
+
+def _worker_loop():
+    """Single worker thread — processes one job at a time."""
+    while True:
+        try:
+            kwargs = _job_queue.get(block=True)
+            process_video_job(**kwargs)
+        except Exception as e:
+            logger.error(f"Worker loop error: {e}")
+        finally:
+            _job_queue.task_done()
+
+
+def enqueue_job(**kwargs):
+    """Add a job to the queue. Starts the worker thread on first call."""
+    global _worker_started
+    with _worker_lock:
+        if not _worker_started:
+            t = threading.Thread(target=_worker_loop, daemon=True)
+            t.start()
+            _worker_started = True
+    _job_queue.put(kwargs)
+    logger.info(f"Job {kwargs.get('job_id')}: queued (position {_job_queue.qsize()})")
+
+
+def get_queue_size() -> int:
+    return _job_queue.qsize()
 
 
 def _set_status(job_id: str, status: JobStatus, **kwargs):

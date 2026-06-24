@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     free_clips_limit: int = 5
     free_max_duration: int = 600
     pro_daily_limit: int = 40
+    max_pro_seats: int = 50
     # CORS
     cors_origins: str = "https://getclipforge.online,https://www.getclipforge.online,https://getclipforge.vercel.app,http://localhost:3000"
 
