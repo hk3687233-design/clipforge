@@ -45,9 +45,12 @@ export default function AdminPage() {
   const [delConfirm, setDelConfirm] = useState<string | null>(null);
   const [delBusy,    setDelBusy]    = useState<string | null>(null);
 
-  // WhatsApp settings
+  // WhatsApp + Seats settings
   const [waNumber, setWaNumber]     = useState("");
+  const [maxSeats, setMaxSeats]     = useState("50");
+  const [seatsUsed, setSeatsUsed]   = useState(0);
   const [waSaving, setWaSaving]     = useState(false);
+  const [seatsSaving, setSeatsSaving] = useState(false);
 
   const load = useCallback(async (sec: string) => {
     setLoading(true); setError("");
@@ -64,6 +67,8 @@ export default function AdminPage() {
       try {
         const cfg = await axios.get(`${API_BASE}/api/config`);
         setWaNumber(cfg.data.whatsapp_number || "");
+        setMaxSeats(String(cfg.data.seats_total || "50"));
+        setSeatsUsed((cfg.data.seats_total || 50) - (cfg.data.seats_remaining || 50));
       } catch {}
     } catch (e: any) {
       setError(e?.response?.data?.detail || "Invalid admin secret");
@@ -298,6 +303,38 @@ export default function AdminPage() {
           <button type="submit" disabled={waSaving}
             className="flex items-center gap-2 bg-[#25D366] hover:bg-[#20bd5a] text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-all disabled:opacity-50 shrink-0">
             {waSaving ? <Loader2 size={13} className="animate-spin" /> : <><Settings size={13} /> Save</>}
+          </button>
+        </form>
+      </div>
+
+      {/* Pro Seats Settings */}
+      <div className="relative z-10 glass border border-white/8 rounded-2xl p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <Users size={14} className="text-brand-400" />
+          <h2 className="font-semibold text-white/90 text-sm">Pro Seat Limit</h2>
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-brand-500/15 text-brand-400 border border-brand-500/25 ml-auto">
+            {seatsUsed}/{maxSeats} used
+          </span>
+        </div>
+        <p className="text-white/35 text-xs leading-relaxed">
+          Maximum Pro users allowed. When full, new activations are blocked and "Sold Out" shows on the site.
+        </p>
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          setSeatsSaving(true);
+          try {
+            await axios.patch(`${API_BASE}/api/admin/config`, { max_pro_seats: maxSeats }, { headers: { "X-Admin-Secret": secret } });
+            toast("Seat limit updated.", "success");
+          } catch (err: any) {
+            toast(err?.response?.data?.detail || "Failed to update.", "error");
+          } finally { setSeatsSaving(false); }
+        }} className="flex gap-2">
+          <input type="number" min="1" max="10000" placeholder="50" value={maxSeats}
+            onChange={e => setMaxSeats(e.target.value)}
+            className="w-24 bg-white/[0.04] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-500/50 font-mono transition-all" />
+          <button type="submit" disabled={seatsSaving}
+            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-all disabled:opacity-50 shrink-0">
+            {seatsSaving ? <Loader2 size={13} className="animate-spin" /> : <><Settings size={13} /> Save</>}
           </button>
         </form>
       </div>
