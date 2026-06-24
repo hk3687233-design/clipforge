@@ -73,6 +73,12 @@ class License(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class SiteConfig(Base):
+    __tablename__ = "site_config"
+    key   = Column(String(100), primary_key=True)
+    value = Column(String(500), nullable=True)
+
+
 def get_db():
     db = SessionLocal()
     try:

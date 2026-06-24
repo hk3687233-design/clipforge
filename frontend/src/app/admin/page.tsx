@@ -6,6 +6,7 @@ import axios from "axios";
 import {
   Scissors, Users, Key, Send, Loader2, RefreshCw, LogOut,
   Search, Crown, ShieldOff, User, Copy, CheckCircle2, Trash2,
+  MessageCircle, Settings,
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -44,6 +45,10 @@ export default function AdminPage() {
   const [delConfirm, setDelConfirm] = useState<string | null>(null);
   const [delBusy,    setDelBusy]    = useState<string | null>(null);
 
+  // WhatsApp settings
+  const [waNumber, setWaNumber]     = useState("");
+  const [waSaving, setWaSaving]     = useState(false);
+
   const load = useCallback(async (sec: string) => {
     setLoading(true); setError("");
     try {
@@ -56,6 +61,10 @@ export default function AdminPage() {
       setLicenses(l.data.items);
       setAuthed(true);
       localStorage.setItem(ADMIN_KEY, sec);
+      try {
+        const cfg = await axios.get(`${API_BASE}/api/config`);
+        setWaNumber(cfg.data.whatsapp_number || "");
+      } catch {}
     } catch (e: any) {
       setError(e?.response?.data?.detail || "Invalid admin secret");
       setAuthed(false);
@@ -262,6 +271,35 @@ export default function AdminPage() {
             {genMsg}
           </p>
         )}
+      </div>
+
+      {/* WhatsApp Settings */}
+      <div className="relative z-10 glass border border-white/8 rounded-2xl p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <MessageCircle size={14} className="text-[#25D366]" />
+          <h2 className="font-semibold text-white/90 text-sm">WhatsApp Settings</h2>
+        </div>
+        <p className="text-white/35 text-xs leading-relaxed">
+          WhatsApp number for the floating chat button. Use international format without + (e.g. 923116116679).
+        </p>
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          setWaSaving(true);
+          try {
+            await axios.patch(`${API_BASE}/api/admin/config`, { whatsapp_number: waNumber }, { headers: { "X-Admin-Secret": secret } });
+            toast("WhatsApp number updated.", "success");
+          } catch (err: any) {
+            toast(err?.response?.data?.detail || "Failed to update.", "error");
+          } finally { setWaSaving(false); }
+        }} className="flex gap-2">
+          <input type="text" placeholder="923116116679" value={waNumber}
+            onChange={e => setWaNumber(e.target.value)}
+            className="flex-1 bg-white/[0.04] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-500/50 font-mono transition-all" />
+          <button type="submit" disabled={waSaving}
+            className="flex items-center gap-2 bg-[#25D366] hover:bg-[#20bd5a] text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-all disabled:opacity-50 shrink-0">
+            {waSaving ? <Loader2 size={13} className="animate-spin" /> : <><Settings size={13} /> Save</>}
+          </button>
+        </form>
       </div>
 
       {/* Users table */}

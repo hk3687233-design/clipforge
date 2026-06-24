@@ -4,6 +4,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ToastProvider } from "@/components/Toast";
 import { CookieConsent } from "@/components/CookieConsent";
+import { WhatsAppButton } from "@/components/WhatsAppButton";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
@@ -14,6 +15,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <ToastProvider>
             {children}
             <CookieConsent />
+            <WhatsAppButton />
           </ToastProvider>
         </AuthProvider>
       </GoogleOAuthProvider>

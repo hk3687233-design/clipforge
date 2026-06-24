@@ -22,7 +22,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from typing import Optional
 
-from app.database import get_db, License, Job, User
+from app.database import get_db, License, Job, User, SiteConfig
 from app.config import settings
 from app.services.email import send_license_email
 
@@ -538,3 +538,42 @@ def admin_delete_job(
     if os.path.exists(job_dir):
         shutil.rmtree(job_dir, ignore_errors=True)
     return {"deleted": True}
+
+
+# ── Site Config (public read, admin write) ────────────────────────────────
+
+DEFAULT_CONFIG = {
+    "whatsapp_number": "923116116679",
+}
+
+
+@router.get("/api/config")
+def get_site_config(db: Session = Depends(get_db)):
+    """Public endpoint — returns site-wide config for frontend."""
+    rows = db.query(SiteConfig).all()
+    config = {**DEFAULT_CONFIG}
+    for r in rows:
+        config[r.key] = r.value
+    return config
+
+
+@router.patch("/api/admin/config")
+def admin_update_config(
+    request_body: dict,
+    db: Session = Depends(get_db),
+    _: None = Depends(_check_admin),
+):
+    """Update one or more site config keys."""
+    allowed = {"whatsapp_number"}
+    updated = {}
+    for key, value in request_body.items():
+        if key not in allowed:
+            continue
+        row = db.query(SiteConfig).filter(SiteConfig.key == key).first()
+        if row:
+            row.value = str(value).strip()
+        else:
+            db.add(SiteConfig(key=key, value=str(value).strip()))
+        updated[key] = str(value).strip()
+    db.commit()
+    return {"updated": updated}
