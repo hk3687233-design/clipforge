@@ -9,7 +9,7 @@ import {
   Twitter, Youtube, Mail,
 } from "lucide-react";
 
-const LEMON_URL = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#";
+const CHECKOUT_URL = process.env.NEXT_PUBLIC_GUMROAD_CHECKOUT_URL || "#";
 
 export default function Home() {
   const router = useRouter();
@@ -59,7 +59,7 @@ export default function Home() {
               <span className="text-white/50 mx-1.5 hidden sm:inline">·</span>
               <span className="text-white/55 hidden sm:inline">Price doubles to $58 after launch period ends</span>
             </p>
-            <a href={LEMON_URL}
+            <a href={CHECKOUT_URL}
               className="shrink-0 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white text-xs font-black px-3 py-1.5 rounded-lg transition-all shadow-md shadow-brand-500/30 whitespace-nowrap">
               Claim $29 →
             </a>
@@ -97,7 +97,7 @@ export default function Home() {
                   className="text-sm text-white/40 hover:text-white/80 transition-colors hidden sm:flex items-center gap-1.5 font-medium">
                   <User size={13} /> Sign In
                 </a>
-                <a href={LEMON_URL}
+                <a href={CHECKOUT_URL}
                   className="flex items-center gap-1.5 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-all shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40">
                   <Zap size={14} /><span className="hidden sm:inline">Get Pro — </span>$29
                 </a>
@@ -129,7 +129,7 @@ export default function Home() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
-          <a href={LEMON_URL}
+          <a href={CHECKOUT_URL}
             className="w-full sm:w-auto relative flex items-center justify-center gap-3 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white font-black px-8 py-4 rounded-2xl text-lg transition-all shadow-2xl shadow-brand-500/30 hover:shadow-brand-500/50 group">
             <Zap size={20} className="shrink-0" /> Get Pro Lifetime — $29
             <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform shrink-0" />
@@ -150,7 +150,7 @@ export default function Home() {
         <div className="flex items-center justify-center gap-6 mt-7 flex-wrap">
           {[
             { icon: <Star size={13} className="text-yellow-400 fill-yellow-400" />, text: "4.9/5 from creators" },
-            { icon: <Shield size={13} className="text-emerald-400" />, text: "Secure via Lemon Squeezy" },
+            { icon: <Shield size={13} className="text-emerald-400" />, text: "Secure via Gumroad" },
             { icon: <Zap size={13} className="text-brand-400" />, text: "License delivered instantly" },
           ].map((item, i) => (
             <div key={i} className="flex items-center gap-2 text-white/30 text-sm font-medium">{item.icon}{item.text}</div>
@@ -372,12 +372,12 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
-              <a href={LEMON_URL}
+              <a href={CHECKOUT_URL}
                 className="flex items-center justify-center gap-3 w-full bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white font-black py-4 rounded-2xl text-base transition-all shadow-xl shadow-brand-500/30 hover:shadow-brand-500/50">
                 <Zap size={18} /> Get Lifetime Access — $29
               </a>
               <div className="flex items-center justify-center gap-2 mt-4 text-white/25 text-xs">
-                <Shield size={11} /> Secure · Lemon Squeezy · Instant delivery
+                <Shield size={11} /> Secure · Gumroad · Instant delivery
               </div>
             </div>
           </div>
@@ -417,7 +417,7 @@ export default function Home() {
             { q: "What is the difference between Free and Pro?", a: "Free allows 3 exports/day, max 10-minute videos, max 5 clips. Pro is unlimited — unlimited videos, 100+ clips per video, ZIP download, affiliate link extraction, and priority processing." },
             { q: "How do I activate my license key?", a: "After purchase, check your email for the license key. Go to getclipforge.online/auth, sign in or create an account, then click 'Activate Key' and paste your key. Your account instantly upgrades to Pro." },
             { q: "Is this a one-time purchase?", a: "Yes. Pay $29 once, use forever. No monthly fees, no renewal, no surprises. Price increases after the launch period ends." },
-            { q: "Can I get a refund?", a: "Yes — 7-day no-questions-asked refund via Lemon Squeezy. Just email support@getclipforge.online and we'll process it immediately." },
+            { q: "Can I get a refund?", a: "Yes — 7-day no-questions-asked refund via Gumroad. Just email support@getclipforge.online and we'll process it immediately." },
           ].map((faq, i) => (
             <div key={i} className="glass glass-hover rounded-2xl p-5 border border-white/6 group">
               <p className="font-bold text-white/90 text-sm mb-2 group-hover:text-white transition-colors">{faq.q}</p>
@@ -447,7 +447,7 @@ export default function Home() {
               </p>
               <p className="text-brand-400/45 text-xs mb-7 font-mono tracking-widest">getclipforge.online</p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <a href={LEMON_URL}
+                <a href={CHECKOUT_URL}
                   className="w-full sm:w-auto flex items-center justify-center gap-3 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white font-black px-10 py-4 rounded-2xl text-lg transition-all shadow-2xl shadow-brand-500/30 hover:shadow-brand-500/50">
                   <Zap size={20} /> Get Lifetime Access — $29
                 </a>
@@ -527,7 +527,7 @@ export default function Home() {
                 { label: "FAQ", href: "/faq" },
                 { label: "Contact Us", href: "/contact" },
                 { label: "Activate License", href: "/auth" },
-                { label: "Get Pro — $29", href: LEMON_URL },
+                { label: "Get Pro — $29", href: CHECKOUT_URL },
               ].map(l => (
                 <a key={l.label} href={l.href} className="block text-white/35 hover:text-white/75 text-sm transition-colors">{l.label}</a>
               ))}

@@ -6,7 +6,7 @@ import {
   Package, Sparkles, Film, Lock, Zap, ShoppingCart
 } from "lucide-react";
 
-const LEMON_URL = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#";
+const CHECKOUT_URL = process.env.NEXT_PUBLIC_GUMROAD_CHECKOUT_URL || "#";
 const FREE_CLIP_LIMIT = 5;
 
 const STATUS_CONFIG: Record<string, { label: string; detail: string; color: string; step: number }> = {
@@ -188,7 +188,7 @@ export default function JobPoller({
                 <span>Download ZIP</span>
               </a>
             ) : (
-              <a href={LEMON_URL}
+              <a href={CHECKOUT_URL}
                 className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shrink-0">
                 <Zap size={11} /> Upgrade — $29
               </a>
@@ -250,7 +250,7 @@ export default function JobPoller({
                     {/* Actions */}
                     <div className="shrink-0 flex items-center gap-1.5">
                       {locked ? (
-                        <a href={LEMON_URL}
+                        <a href={CHECKOUT_URL}
                           className="flex items-center gap-1.5 text-brand-400/70 border border-brand-500/20 bg-brand-500/8 hover:bg-brand-500/15 text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-all">
                           <Lock size={10} /> Pro
                         </a>
@@ -292,7 +292,7 @@ export default function JobPoller({
               <p className="text-white/30 text-xs mb-4">
                 Unlock all {job.products.length} clips · ZIP download · 2K quality
               </p>
-              <a href={LEMON_URL}
+              <a href={CHECKOUT_URL}
                 className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition-all">
                 <Zap size={13} /> Upgrade to Pro — $29 lifetime
               </a>

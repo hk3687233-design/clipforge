@@ -6,7 +6,7 @@ import JobPoller from "@/components/JobPoller";
 import { useAuth } from "@/contexts/AuthContext";
 import { Scissors, Zap, Lock, Loader2, User, Key, X, CheckCircle2, AlertCircle, History } from "lucide-react";
 
-const LEMON_URL = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#";
+const CHECKOUT_URL = process.env.NEXT_PUBLIC_GUMROAD_CHECKOUT_URL || "#";
 
 export default function ToolPage() {
   const router = useRouter();
@@ -79,7 +79,7 @@ export default function ToolPage() {
 
           <div className="flex items-center gap-3">
             {plan === "free" && (
-              <a href={LEMON_URL}
+              <a href={CHECKOUT_URL}
                 className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all glow-button">
                 <Zap size={12} /><span className="hidden sm:inline">Upgrade — </span>$29
               </a>
@@ -115,7 +115,7 @@ export default function ToolPage() {
             <div className="flex flex-col items-center gap-2">
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-yellow-400 text-xs font-medium">
                 <Lock size={12} /> Free plan: {user.daily_jobs_used || 0}/3 exports used today · max 10 min · 5 clips ·{" "}
-                <a href={LEMON_URL} className="underline underline-offset-2 font-bold">Upgrade for unlimited</a>
+                <a href={CHECKOUT_URL} className="underline underline-offset-2 font-bold">Upgrade for unlimited</a>
               </div>
               {(user.daily_jobs_used || 0) >= 2 && (user.daily_jobs_used || 0) < 3 && (
                 <p className="text-amber-400/80 text-xs">Last free export for today — upgrade to Pro for unlimited</p>

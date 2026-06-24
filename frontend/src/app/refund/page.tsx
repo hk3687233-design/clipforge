@@ -50,7 +50,7 @@ export default function RefundPolicy() {
               {[
                 { step: "01", icon: <Mail size={16} />, title: "Email us", body: "Send a refund request to support@getclipforge.online from the email address you used to purchase." },
                 { step: "02", icon: <Clock size={16} />, title: "We process it fast", body: "We'll initiate your refund within 24 hours of receiving your request. No lengthy review process." },
-                { step: "03", icon: <CheckCircle2 size={16} />, title: "Refund arrives", body: "Funds are returned to your original payment method within 3–5 business days via Lemon Squeezy." },
+                { step: "03", icon: <CheckCircle2 size={16} />, title: "Refund arrives", body: "Funds are returned to your original payment method within 3–5 business days via Gumroad." },
               ].map(s => (
                 <div key={s.step} className="glass rounded-xl p-4 border border-white/6 flex items-start gap-4">
                   <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-500/20 to-purple-600/10 border border-brand-500/20 flex items-center justify-center text-brand-400 shrink-0">{s.icon}</div>

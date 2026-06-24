@@ -78,7 +78,7 @@ export default function TermsOfService() {
           </Section>
 
           <Section title="7. Payments & Billing">
-            <p>All payments are processed securely by Lemon Squeezy. By completing a purchase you agree to their terms and conditions. All prices are in USD. The Pro plan is a one-time lifetime purchase — there are no recurring charges.</p>
+            <p>All payments are processed securely by Gumroad. By completing a purchase you agree to their terms and conditions. All prices are in USD. The Pro plan is a one-time lifetime purchase — there are no recurring charges.</p>
             <p className="mt-3">We reserve the right to change pricing at any time for new customers. Existing lifetime purchasers are not affected by price increases.</p>
           </Section>
 

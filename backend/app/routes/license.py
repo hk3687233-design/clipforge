@@ -54,33 +54,28 @@ def _generate_key(plan: str = "pro") -> str:
     return f"{prefix}-{uuid.uuid4().hex[:6].upper()}-{uuid.uuid4().hex[:6].upper()}-{uuid.uuid4().hex[:6].upper()}"
 
 
-def _ls_validate(key: str) -> dict:
-    """Call Lemon Squeezy API to validate a license key."""
-    if not settings.lemon_squeezy_api_key:
-        # No LS API key set — only keys already saved to DB (via webhook) are valid.
-        # DB lookup happens before this function is called, so reaching here means
-        # the key is NOT in our DB → reject it.
-        return {"valid": False, "plan": "pro"}
+def _gumroad_verify_sale(sale_id: str) -> dict:
+    """Verify a sale via Gumroad API."""
+    if not settings.gumroad_access_token:
+        return {"valid": False}
     try:
-        payload = urllib.parse.urlencode({"license_key": key}).encode()
+        payload = urllib.parse.urlencode({
+            "access_token": settings.gumroad_access_token,
+        }).encode()
         req = urllib.request.Request(
-            "https://api.lemonsqueezy.com/v1/licenses/validate",
+            f"https://api.gumroad.com/v2/sales/{sale_id}",
             data=payload,
-            headers={
-                "Authorization": f"Bearer {settings.lemon_squeezy_api_key}",
-                "Accept": "application/json",
-            },
-            method="POST",
+            method="GET",
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read())
+            sale = data.get("sale", {})
             return {
-                "valid": data.get("valid", False),
-                "plan": "pro",
-                "instance_id": data.get("instance", {}).get("id", ""),
+                "valid": not sale.get("refunded", False) and not sale.get("chargebacked", False),
+                "email": sale.get("email", ""),
             }
-    except Exception as e:
-        raise HTTPException(503, f"License server unreachable: {e}")
+    except Exception:
+        return {"valid": False}
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────
@@ -114,28 +109,8 @@ def activate_license(request: Request, req: ActivateRequest, db: Session = Depen
 
         return {"valid": True, "plan": lic.plan}
 
-    # 3. CF-FREE keys must exist in DB (generated via webhook) — no LS check
-    if key.startswith("CF-FREE"):
-        raise HTTPException(403, "Invalid license key")
-
-    # 4. Validate with Lemon Squeezy
-    result = _ls_validate(key)
-    if not result["valid"]:
-        raise HTTPException(403, "Invalid or expired license key")
-
-    # 5. Save to local DB with device binding
-    new_lic = License(
-        key=key,
-        plan=result.get("plan", "pro"),
-        instance_id=result.get("instance_id", ""),
-        device_id=req.device_id,
-        activated_at=datetime.utcnow(),
-        is_valid=True,
-    )
-    db.add(new_lic)
-    db.commit()
-
-    return {"valid": True, "plan": new_lic.plan}
+    # Key must exist in DB (generated via webhook or admin)
+    raise HTTPException(403, "Invalid license key")
 
 
 @router.post("/api/license/verify")
@@ -182,45 +157,39 @@ def free_signup(req: FreeSignupRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/api/license/webhook")
-async def lemon_webhook(request: Request, db: Session = Depends(get_db)):
+async def gumroad_webhook(request: Request, db: Session = Depends(get_db)):
     """
-    Lemon Squeezy order webhook.
-    On successful order -> generate license key -> save to DB -> send email.
+    Gumroad sale webhook (ping).
+    On successful sale -> generate license key -> save to DB -> send email.
     """
-    body = await request.body()
+    form = await request.form()
+    data = dict(form)
 
-    # Verify signature
-    if settings.lemon_squeezy_webhook_secret:
-        sig = request.headers.get("X-Signature", "")
-        expected = hmac.new(
-            settings.lemon_squeezy_webhook_secret.encode(),
-            msg=body,
-            digestmod=hashlib.sha256,
-        ).hexdigest()
-        if not hmac.compare_digest(sig, expected):
-            raise HTTPException(400, "Invalid webhook signature")
-
-    data = json.loads(body)
-    event = data.get("meta", {}).get("event_name", "")
-
-    if event not in ("order_created", "subscription_created"):
+    resource = data.get("resource_name", "sale")
+    if resource not in ("sale", "ping"):
         return {"received": True}
 
-    attrs = data.get("data", {}).get("attributes", {})
-    customer_email = attrs.get("user_email", "")
-    order_id = str(data.get("data", {}).get("id", ""))
-    variant_id = str(attrs.get("first_order_item", {}).get("variant_id", ""))
+    # Verify seller_id if configured
+    if settings.gumroad_seller_id:
+        if data.get("seller_id", "") != settings.gumroad_seller_id:
+            raise HTTPException(400, "Invalid seller")
 
-    # Idempotency: skip if we already processed this order
+    customer_email = str(data.get("email", "")).strip().lower()
+    sale_id = str(data.get("sale_id", ""))
+    order_id = sale_id
+    is_test = str(data.get("test", "false")).lower() == "true"
+    refunded = str(data.get("refunded", "false")).lower() == "true"
+
+    if refunded:
+        return {"received": True, "skipped": "refunded"}
+
+    # Idempotency: skip if we already processed this sale
     if order_id:
         existing = db.query(License).filter(License.order_id == order_id).first()
         if existing:
             return {"received": True, "key": existing.key, "duplicate": True}
 
-    # Determine plan from variant
     plan = "pro"
-    if settings.lemon_squeezy_variant_free and variant_id == settings.lemon_squeezy_variant_free:
-        plan = "free"
 
     # Generate license key
     key = _generate_key(plan)
@@ -234,6 +203,14 @@ async def lemon_webhook(request: Request, db: Session = Depends(get_db)):
         is_valid=True,
     )
     db.add(lic)
+
+    # Auto-link to existing user if they have an account
+    if customer_email:
+        user = db.query(User).filter(User.email == customer_email).first()
+        if user:
+            user.license_key = key
+            user.plan = "pro"
+
     db.commit()
 
     # Send email with license key

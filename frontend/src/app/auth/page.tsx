@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const LEMON_URL = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#";
+const CHECKOUT_URL = process.env.NEXT_PUBLIC_GUMROAD_CHECKOUT_URL || "#";
 type Mode = "login" | "signup" | "signup-success" | "set-password" | "forgot-password";
 
 function AuthPageInner() {
@@ -325,7 +325,7 @@ function AuthPageInner() {
 
                   <div className="rounded-xl border border-brand-500/20 bg-brand-500/8 p-4 text-center space-y-2">
                     <p className="text-white/50 text-xs">Want full access right now?</p>
-                    <a href={LEMON_URL}
+                    <a href={CHECKOUT_URL}
                       className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-5 py-2 rounded-lg transition-all">
                       <Zap size={12} /> Get Pro — $29 Lifetime
                     </a>

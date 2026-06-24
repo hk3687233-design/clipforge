@@ -9,7 +9,7 @@ interface Props {
   freeMode?: boolean;  // renders as "Start Free" button on pricing card
 }
 
-const LEMON_URL = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#";
+const CHECKOUT_URL = process.env.NEXT_PUBLIC_GUMROAD_CHECKOUT_URL || "#";
 
 export default function LicenseGate({ onActivated, inline, freeMode }: Props) {
   const [key, setKey] = useState("");
@@ -111,7 +111,7 @@ export default function LicenseGate({ onActivated, inline, freeMode }: Props) {
             <div className="border-t border-white/5 pt-2">
               <p className="text-white/30 text-xs text-center">
                 Don't have a key?{" "}
-                <a href={LEMON_URL} className="text-brand-400 hover:text-brand-300 underline">
+                <a href={CHECKOUT_URL} className="text-brand-400 hover:text-brand-300 underline">
                   Get Pro for $29 →
                 </a>
               </p>

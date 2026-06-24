@@ -42,7 +42,7 @@ export default function PrivacyPolicy() {
             </ul>
 
             <Sub>License & Payment Information</Sub>
-            <p>We collect your license key and the plan type (Free or Pro) linked to your account. Payment processing is handled entirely by Lemon Squeezy — we never receive or store your credit card, bank, or billing details.</p>
+            <p>We collect your license key and the plan type (Free or Pro) linked to your account. Payment processing is handled entirely by Gumroad — we never receive or store your credit card, bank, or billing details.</p>
 
             <Sub>Usage Data</Sub>
             <p>We collect limited technical data to operate the service: number of daily video exports, date of last export (for rate-limiting), and account creation timestamp.</p>
@@ -67,7 +67,7 @@ export default function PrivacyPolicy() {
             <p>ClipForge relies on the following third-party services, each with their own privacy policies:</p>
             <div className="mt-4 space-y-3">
               {[
-                { name: "Lemon Squeezy", role: "Payment processing and license management" },
+                { name: "Gumroad", role: "Payment processing and license management" },
                 { name: "Google OAuth", role: "Optional Google Sign-In authentication" },
                 { name: "Cloudflare R2", role: "Temporary clip storage and delivery" },
                 { name: "Railway", role: "Backend hosting and PostgreSQL database" },

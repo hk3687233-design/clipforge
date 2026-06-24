@@ -13,7 +13,7 @@ const faqs = [
   { q: "What is the difference between Free and Pro?", a: "Free allows 3 exports/day, max 10-minute videos, max 5 clips. Pro is unlimited — unlimited videos, 100+ clips per video, ZIP download, affiliate link extraction, and priority processing." },
   { q: "How do I activate my license key?", a: "After purchase, check your email for the license key. Go to getclipforge.online/auth, sign in or create an account, then click 'Activate Key' and paste your key. Your account instantly upgrades to Pro." },
   { q: "Is this a one-time purchase?", a: "Yes. Pay $29 once, use forever. No monthly fees, no renewal, no surprises. Price increases after the launch period ends." },
-  { q: "Can I get a refund?", a: "Yes — 7-day no-questions-asked refund via Lemon Squeezy. Just email support@getclipforge.online and we'll process it immediately." },
+  { q: "Can I get a refund?", a: "Yes — 7-day no-questions-asked refund via Gumroad. Just email support@getclipforge.online and we'll process it immediately." },
   { q: "What video formats are supported?", a: "MP4, MKV, WebM, and most common video formats. For URL-based processing, we support YouTube, TikTok, and Instagram Reels." },
   { q: "How long does processing take?", a: "Average 2 minutes for a 10-minute video. Longer videos take proportionally more time. You can queue multiple videos at once." },
   { q: "Is my data safe?", a: "Yes. Videos are processed temporarily and deleted within 24 hours. We don't store or share your content. See our Privacy Policy for full details." },

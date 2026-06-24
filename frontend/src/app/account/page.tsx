@@ -186,7 +186,7 @@ export default function AccountPage() {
               </p>
             </div>
             {user.plan === "free" && (
-              <a href={process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#"}
+              <a href={process.env.NEXT_PUBLIC_GUMROAD_CHECKOUT_URL || "#"}
                 className="bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all">
                 Upgrade
               </a>

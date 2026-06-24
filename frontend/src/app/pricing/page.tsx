@@ -1,7 +1,7 @@
 "use client";
 import { Scissors, CheckCircle2, Zap, Shield, ArrowLeft } from "lucide-react";
 
-const LEMON_URL = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL || "#";
+const CHECKOUT_URL = process.env.NEXT_PUBLIC_GUMROAD_CHECKOUT_URL || "#";
 
 export default function PricingPage() {
   return (
@@ -80,7 +80,7 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-              <a href={LEMON_URL} className="flex items-center justify-center gap-3 w-full bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white font-black py-4 rounded-2xl text-base transition-all shadow-xl shadow-brand-500/30">
+              <a href={CHECKOUT_URL} className="flex items-center justify-center gap-3 w-full bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white font-black py-4 rounded-2xl text-base transition-all shadow-xl shadow-brand-500/30">
                 <Zap size={18} /> Get Lifetime Access — $29
               </a>
               <div className="flex items-center justify-center gap-2 mt-4 text-white/25 text-xs">

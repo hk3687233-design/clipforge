@@ -13,12 +13,10 @@ class Settings(BaseSettings):
     max_video_size_mb: int = 500
     temp_dir: str = "/tmp/clipforge"
     whisper_model: str = "tiny"
-    # Lemon Squeezy (payments)
-    lemon_squeezy_api_key: str = ""
-    lemon_squeezy_webhook_secret: str = ""
-    lemon_squeezy_store_id: str = ""
-    lemon_squeezy_variant_pro: str = ""     # Pro plan variant ID
-    lemon_squeezy_variant_free: str = ""    # Free plan variant ID
+    # Gumroad (payments)
+    gumroad_access_token: str = ""
+    gumroad_product_id: str = ""
+    gumroad_seller_id: str = ""
     # Email via Resend
     resend_api_key: str = ""
     email_from: str = "ClipForge <noreply@getclipforge.online>"
