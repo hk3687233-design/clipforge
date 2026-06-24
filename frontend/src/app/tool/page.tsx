@@ -81,7 +81,7 @@ export default function ToolPage() {
             {plan === "free" && (
               <button onClick={() => setShowCheckout(true)}
                 className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all glow-button">
-                <Zap size={12} /><span className="hidden sm:inline">Upgrade — </span>$29
+                <Zap size={12} /> Upgrade
               </button>
             )}
             <div className="flex items-center gap-3">

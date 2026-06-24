@@ -112,7 +112,7 @@ export default function LicenseGate({ onActivated, inline, freeMode }: Props) {
               <p className="text-white/30 text-xs text-center">
                 Don't have a key?{" "}
                 <button onClick={openCheckoutModal} className="text-brand-400 hover:text-brand-300 underline">
-                  Get Pro for $29 →
+                  Get Pro →
                 </button>
               </p>
             </div>

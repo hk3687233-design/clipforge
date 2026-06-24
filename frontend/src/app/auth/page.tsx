@@ -328,7 +328,7 @@ function AuthPageInner() {
                     <p className="text-white/50 text-xs">Want full access right now?</p>
                     <button onClick={() => setShowCheckout(true)}
                       className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-5 py-2 rounded-lg transition-all">
-                      <Zap size={12} /> Get Pro — $29 Lifetime
+                      <Zap size={12} /> Get Pro Lifetime
                     </button>
                   </div>
                 </div>

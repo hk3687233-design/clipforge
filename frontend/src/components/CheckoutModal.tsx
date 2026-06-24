@@ -61,7 +61,7 @@ export function CheckoutModal({ open: openProp, onClose: onCloseProp }: Props) {
         </div>
 
         <p className="text-white/40 text-xs leading-relaxed">
-          Choose your preferred payment method. Both give you lifetime Pro access.
+          Choose your preferred currency. Both give you lifetime Pro access.
         </p>
 
         <div className="space-y-3">
@@ -72,11 +72,8 @@ export function CheckoutModal({ open: openProp, onClose: onCloseProp }: Props) {
               <CreditCard size={20} className="text-brand-400" />
             </div>
             <div className="flex-1">
-              <div className="flex items-center justify-between">
-                <p className="text-white font-bold text-sm">Pay with Card</p>
-                <span className="text-white font-black text-lg">$29</span>
-              </div>
-              <p className="text-white/30 text-xs mt-0.5">USD · Visa, Mastercard, PayPal via Gumroad</p>
+              <p className="text-white font-bold text-sm">Pay in USD</p>
+              <p className="text-white/30 text-xs mt-0.5">Visa, Mastercard, PayPal via Gumroad</p>
             </div>
           </a>
 
@@ -87,11 +84,8 @@ export function CheckoutModal({ open: openProp, onClose: onCloseProp }: Props) {
               <MessageCircle size={20} className="text-[#25D366]" />
             </div>
             <div className="flex-1">
-              <div className="flex items-center justify-between">
-                <p className="text-white font-bold text-sm">Pay via WhatsApp</p>
-                <span className="text-white font-black text-lg">Rs. 5,000</span>
-              </div>
-              <p className="text-white/30 text-xs mt-0.5">PKR · JazzCash, EasyPaisa, Bank Transfer</p>
+              <p className="text-white font-bold text-sm">Pay in PKR</p>
+              <p className="text-white/30 text-xs mt-0.5">JazzCash, EasyPaisa, Bank Transfer via WhatsApp</p>
             </div>
           </a>
         </div>

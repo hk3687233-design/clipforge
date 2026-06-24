@@ -190,7 +190,7 @@ export default function JobPoller({
             ) : (
               <button onClick={openCheckoutModal}
                 className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shrink-0">
-                <Zap size={11} /> Upgrade — $29
+                <Zap size={11} /> Upgrade
               </button>
             )}
           </div>
@@ -294,7 +294,7 @@ export default function JobPoller({
               </p>
               <button onClick={openCheckoutModal}
                 className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition-all">
-                <Zap size={13} /> Upgrade to Pro — $29 lifetime
+                <Zap size={13} /> Upgrade to Pro
               </button>
             </div>
           )}
